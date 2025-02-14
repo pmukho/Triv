@@ -1,0 +1,9 @@
+# Database
+
+Note that the following env variables must be defined in .env file in parent directory
+
+```
+POSTGRES_USER=...
+POSTGRES_PASSWORD=...
+POSTGRES_DB=...
+```
