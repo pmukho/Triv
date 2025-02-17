@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 import asyncio
+import redis.asyncio as redis
 from pydantic import BaseModel, Field
 import psycopg2
 import os
@@ -18,6 +19,8 @@ def get_db_connection():
     conn = psycopg2.connect(**DB_CONFIG)
     return conn
 
+redis_client = None
+
 class _GameBatchReqElem(BaseModel):
     category: str
     count: int
@@ -26,6 +29,19 @@ class GameBatchReq(BaseModel):
     user_id: str
     batch_size: int
     batch: list[_GameBatchReqElem]
+
+class Question(BaseModel):
+    id: str
+    category: str
+    hint1: str
+    hint2: str
+    hint3: str
+    answer: str
+    created_at: datetime.datetime
+    usage_count: int
+
+class GameBatchResp(BaseModel):
+    batch: list[Question]
 
 async def notify_qgen():
     while True:
@@ -38,12 +54,18 @@ async def notify_qgen():
 
 @asynccontextmanager
 async def lifespan(app):
-    # Run at startup
     print("Starting up")
+
+    # background task that runs periodically
     asyncio.create_task(notify_qgen())
+
+    global redis_client
+    redis_client = await redis.from_url("redis://redis:6379/0")
+
     yield
-    # Run at shutdown
     print("Shutting down")
+
+    await redis.aclose()
 
 app = FastAPI(lifespan=lifespan)
 
@@ -57,6 +79,15 @@ async def serve_game_batch(batch_req: GameBatchReq):
     # if none, get new batch from db
 
     user_id = batch_req.user_id
+    async with redis_client.pipeline(transaction=True) as pipe:
+        for elem in batch_req.batch:
+            category = elem.category
+            count = elem.count
+            cache_key = f"unseen:{user_id}:{elem.category}"
+            pipe.lrange(cache_key, 0, count-1)
+        cached_results = await pipe.execute()
+    print(f"Cached results: {cached_results}")
+
     queries = []
     params = []
     for elem in batch_req.batch:
@@ -70,7 +101,8 @@ async def serve_game_batch(batch_req: GameBatchReq):
             LIMIT %s
         """
         queries.append(query)
-        params.extend([user_id, elem.category, elem.count])
+        # request extra questions to cache for later
+        params.extend([user_id, elem.category, batch_req.batch_size])
     query = " UNION ALL ".join(queries)
     print(query)
     print(params)
@@ -81,10 +113,36 @@ async def serve_game_batch(batch_req: GameBatchReq):
         cursor = conn.cursor()
         cursor.execute(query, params)
         questions = cursor.fetchall()
-        cursor.close()
-        conn.close()
+        print(f"Questions from DB: {questions}")
     except Exception as e:
         print(e)
-        questions = []
+        return {"error": "Failed to fetch questions"}
+    finally:
+        cursor.close()
+        conn.close()
+    
+    # cache excess questions
+    return_qs = []
+    counts = {elem.category: elem.count for elem in batch_req.batch}
+    async with redis_client.pipeline(transaction=True) as pipe:
+        for q in questions:
+            q = Question(
+                id=q[0],
+                category=q[1],
+                hint1=q[2],
+                hint2=q[3],
+                hint3=q[4],
+                answer=q[5],
+                created_at=q[6],
+                usage_count=q[7]
+            )
+            if counts[q.category] > 0:
+                return_qs.append(q)
+                counts[q.category] -= 1
+            else:
+                cache_key = f"unseen:{user_id}:{q.category}"
+                pipe.rpush(cache_key, q.id)
+                pipe.set(f"question:{q.id}", q.json())
+        await pipe.execute()
 
-    return questions
+    return GameBatchResp(batch=return_qs)
