@@ -18,6 +18,16 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
 
   cache:
     build:
@@ -32,6 +42,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     depends_on:
       - db
+      - redis
 
   game-factory:
     build:
@@ -63,3 +74,9 @@ services:
 networks:
   project:
     driver: bridge
+
+volumes:
+  db-data:
+    driver: local
+  redis-data:
+    driver: local
