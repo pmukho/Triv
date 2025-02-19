@@ -7,7 +7,7 @@ const myId = Math.floor(Math.random() * 100); // Placeholder for the client ID, 
 
 const start_game = async () => {
     try {
-        const res = await fetch('http://localhost:8000/api/start-game', {
+        const res = await fetch('game-factory://game-factory:8001/api/start-game', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -24,7 +24,7 @@ const start_game = async () => {
 
 const request_hints = async (clientId) => {
     try {
-        const res = await fetch('http://localhost:8000/api/request-hints', {
+        const res = await fetch('game-factory://game-factory:8001/api/request-hints', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -112,7 +112,7 @@ const Quiz = () => {
         console.log(answer);
         e.preventDefault();
         // Submit answer to the server
-        const res = await fetch('http://localhost:8000/api/submit-answer', {
+        const res = await fetch('game-factory://game-factory:8001/api/submit-answer', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
