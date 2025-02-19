@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 import asyncio
 import redis.asyncio as redis
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 import psycopg2
 import os
 import datetime
@@ -57,7 +57,7 @@ async def lifespan(app):
     print("Starting up")
 
     # background task that runs periodically
-    asyncio.create_task(notify_qgen())
+    # asyncio.create_task(notify_qgen())
 
     global redis_client
     redis_client = await redis.from_url("redis://redis:6379/0")
@@ -71,41 +71,62 @@ app = FastAPI(lifespan=lifespan)
 
 @app.get("/")
 async def read_root():
-    return {"message": "Deployment of QAStore with FastAPI"}
+    return {"message": "Deployment of Cache with FastAPI"}
 
-@app.post("/getbatch/")
-async def serve_game_batch(batch_req: GameBatchReq):
-    # check cache for unseen q's for client
-    # if none, get new batch from db
-
+async def get_redis_batch(batch_req: GameBatchReq):
+    print("CHECKING CACHE")
     user_id = batch_req.user_id
     async with redis_client.pipeline(transaction=True) as pipe:
         for elem in batch_req.batch:
-            category = elem.category
             count = elem.count
             cache_key = f"unseen:{user_id}:{elem.category}"
             pipe.lrange(cache_key, 0, count-1)
+            pipe.ltrim(cache_key, count, -1) # remove the unseen questions from cache
         cached_results = await pipe.execute()
     print(f"Cached results: {cached_results}")
 
+    # see how many questions we need to fetch from db
+    counts = {elem.category: elem.count for elem in batch_req.batch}
+    return_qs = []
+    for i in range(0, len(cached_results), 2):
+        for q in cached_results[i]:
+            q = q.decode()
+            q = Question.parse_raw(q)
+            return_qs.append(q)
+
+            if counts[q.category] > 0:
+                counts[q.category] -= 1
+                if counts[q.category] == 0:
+                    del counts[q.category]
+
+    fwd_batch_req = GameBatchReq(
+        user_id=user_id,
+        batch_size=batch_req.batch_size,
+        batch=[_GameBatchReqElem(category=k, count=v) for k, v in counts.items()]
+    )
+
+    return return_qs, fwd_batch_req
+
+async def get_db_batch(batch_req: GameBatchReq):
+    print("CHECKING DB")
+    user_id = batch_req.user_id
     queries = []
     params = []
     for elem in batch_req.batch:
-        print(elem)
         query = f"""
-            SELECT *
+            (SELECT *
             FROM questions q
-            LEFT JOIN user_question_store uqs ON q.id = uqs.question_id AND uqs.user_id = %s
+            LEFT JOIN user_question_store uqs 
+                ON q.id = uqs.question_id 
+                AND uqs.user_id = %s
             WHERE uqs.question_id IS NULL
-            AND q.category = %s
-            LIMIT %s
+                AND q.category = %s
+            LIMIT %s)
         """
         queries.append(query)
-        # request extra questions to cache for later
         params.extend([user_id, elem.category, batch_req.batch_size])
     query = " UNION ALL ".join(queries)
-    print(query)
-    print(params)
+    print("Query: ", query)
     
     questions = []
     try:
@@ -113,36 +134,56 @@ async def serve_game_batch(batch_req: GameBatchReq):
         cursor = conn.cursor()
         cursor.execute(query, params)
         questions = cursor.fetchall()
-        print(f"Questions from DB: {questions}")
+        print("Fetched questions: ", questions)
+        questions = [Question(
+            id=q[0],
+            category=q[1],
+            hint1=q[2],
+            hint2=q[3],
+            hint3=q[4],
+            answer=q[5],
+            created_at=q[6],
+            usage_count=q[7]
+        ) for q in questions]
+
+        # split questions into return and excess
+        return_qs = []
+        excess_qs = []
+        counts = {elem.category: elem.count for elem in batch_req.batch}
+        for q in questions:
+            if counts[q.category] > 0:
+                counts[q.category] -= 1
+                return_qs.append(q)
+            else:
+                excess_qs.append(q)
+
+        # cache excess questions
+        print("Caching excess questions: ", excess_qs)
+        async with redis_client.pipeline(transaction=True) as pipe:
+            for q in excess_qs:
+                cache_key = f"unseen:{user_id}:{q.category}"
+                pipe.rpush(cache_key, q.json())
+            await pipe.execute()
+
+        # return the questions
+        return return_qs
     except Exception as e:
         print(e)
         return {"error": "Failed to fetch questions"}
     finally:
         cursor.close()
-        conn.close()
-    
-    # cache excess questions
-    return_qs = []
-    counts = {elem.category: elem.count for elem in batch_req.batch}
-    async with redis_client.pipeline(transaction=True) as pipe:
-        for q in questions:
-            q = Question(
-                id=q[0],
-                category=q[1],
-                hint1=q[2],
-                hint2=q[3],
-                hint3=q[4],
-                answer=q[5],
-                created_at=q[6],
-                usage_count=q[7]
-            )
-            if counts[q.category] > 0:
-                return_qs.append(q)
-                counts[q.category] -= 1
-            else:
-                cache_key = f"unseen:{user_id}:{q.category}"
-                pipe.rpush(cache_key, q.id)
-                pipe.set(f"question:{q.id}", q.json())
-        await pipe.execute()
+        conn.close()       
 
-    return GameBatchResp(batch=return_qs)
+@app.post("/getbatch/")
+async def serve_game_batch(batch_req: GameBatchReq):
+    # check cache for unseen q's for client
+    # if none, get new batch from db
+
+    cached_qs, fwd_req = await get_redis_batch(batch_req)
+    print("FWD REQ: ", fwd_req)
+    if len(fwd_req.batch) == 0:
+        return GameBatchResp(batch=cached_qs)
+
+    db_results = await get_db_batch(fwd_req)
+    return GameBatchResp(batch=cached_qs + db_results)
+
