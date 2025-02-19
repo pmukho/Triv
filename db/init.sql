@@ -10,16 +10,26 @@ CREATE TABLE IF NOT EXISTS questions (
 );
 
 INSERT INTO questions (id, category, hint1, hint2, hint3, answer) VALUES
-('1', 'TEST', 'h1', 'h2', 'h3', 'ans'),
-('2', 'TEST', 'h1', 'h2', 'h3', 'ans'),
-('3', 'TEST', 'h1', 'h2', 'h3', 'ans'),
-('4', 'TEST', 'h1', 'h2', 'h3', 'ans'),
-('5', 'TEST', 'h1', 'h2', 'h3', 'ans'),
-('6', 'TEST', 'h1', 'h2', 'h3', 'ans'),
-('7', 'TEST', 'h1', 'h2', 'h3', 'ans'),
-('8', 'TEST', 'h1', 'h2', 'h3', 'ans'),
-('9', 'TEST', 'h1', 'h2', 'h3', 'ans'),
-('10', 'TEST', 'h1', 'h2', 'h3', 'ans');
+('1', 'CAT1', 'h1', 'h2', 'h3', 'ans'),
+('2', 'CAT1', 'h1', 'h2', 'h3', 'ans'),
+('3', 'CAT1', 'h1', 'h2', 'h3', 'ans'),
+('4', 'CAT1', 'h1', 'h2', 'h3', 'ans'),
+('5', 'CAT1', 'h1', 'h2', 'h3', 'ans'),
+('6', 'CAT1', 'h1', 'h2', 'h3', 'ans'),
+('7', 'CAT1', 'h1', 'h2', 'h3', 'ans'),
+('8', 'CAT1', 'h1', 'h2', 'h3', 'ans'),
+('9', 'CAT1', 'h1', 'h2', 'h3', 'ans'),
+('10', 'CAT1', 'h1', 'h2', 'h3', 'ans'),
+('11', 'CAT2', 'h1', 'h2', 'h3', 'ans'),
+('12', 'CAT2', 'h1', 'h2', 'h3', 'ans'),
+('13', 'CAT2', 'h1', 'h2', 'h3', 'ans'),
+('14', 'CAT2', 'h1', 'h2', 'h3', 'ans'),
+('15', 'CAT2', 'h1', 'h2', 'h3', 'ans'),
+('16', 'CAT2', 'h1', 'h2', 'h3', 'ans'),
+('17', 'CAT2', 'h1', 'h2', 'h3', 'ans'),
+('18', 'CAT2', 'h1', 'h2', 'h3', 'ans'),
+('19', 'CAT2', 'h1', 'h2', 'h3', 'ans'),
+('20', 'CAT2', 'h1', 'h2', 'h3', 'ans');
 
 
 CREATE TABLE IF NOT EXISTS users (
