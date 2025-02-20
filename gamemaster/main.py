@@ -6,8 +6,8 @@ from gmfactory import GmFactory
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
+    allow_origins=["http://localhost"],
+    allow_methods=["POST"],
     allow_headers=["*"],
 )
 

@@ -20,6 +20,9 @@ RUN rm -rf /usr/share/nginx/html/*
 # Copy the production build from the previous stage into NGINX's directory
 COPY --from=build /app/build /usr/share/nginx/html
 
+# Copy NGINX configuration file
+COPY ./nginx.conf /etc/nginx/conf.d/default.conf
+
 # Expose port 80 and start NGINX
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
