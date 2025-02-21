@@ -48,3 +48,8 @@ INSERT INTO user_question_store (user_id, question_id) VALUES
 ('3', '8'),
 ('3', '9'),
 ('3', '10');
+
+CREATE TABLE IF NOT EXISTS wiki_articles (
+    title TEXT PRIMARY KEY,
+    category TEXT NOT NULL
+);

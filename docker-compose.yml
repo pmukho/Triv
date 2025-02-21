@@ -7,17 +7,29 @@ services:
       - "80:80"
     environment:
       - NODE_ENV=DEV
+    depends_on:
+      - game-factory
 
   db:
     build:
       context: ./db
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.db
     container_name: postgres-db
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+  db-seeder:
+    build:
+      context: .
+      dockerfile: db/Dockerfile.seed
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    depends_on:
+      - db
 
   cache:
     build:
@@ -39,7 +51,7 @@ services:
       dockerfile: Dockerfile
     container_name: game-factory
     ports:
-      - "8001:8001"
+      - "8003:8003"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
