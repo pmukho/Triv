@@ -25,6 +25,12 @@ class Questions(BaseModel):
     ok: bool = True
     error: str = ""
 
+tags_metadata = [
+    {
+        "name": "questions",
+        "description": "Get a NAQT style trivia given an article title from the cache"
+    }
+]
 
 
 @asynccontextmanager
@@ -35,7 +41,7 @@ async def lifespan(app: FastAPI):
     llm = OpenAI()
     yield
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=lifespan, openapi_tags=tags_metadata)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost"],
@@ -47,8 +53,8 @@ app.add_middleware(
 def read_root():
     return {"Hello": "World"}
 
-@app.post("/questions")
-def read_questions(articles: Articles):
+@app.post("/questions", tags=["questions"])
+def read_questions(articles: Articles) -> Questions:
     questions = []
     ok = True
     error = ""

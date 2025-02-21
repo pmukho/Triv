@@ -45,6 +45,14 @@ class Question(BaseModel):
 class GameBatchResp(BaseModel):
     batch: list[Question]
 
+tags_metadata = [
+    {
+        "name": "getbatch",
+        "description": "Serve a batch of questions to the game master given the counts for each category",
+    }
+]
+
+
 async def generate_questions():
     print("Notifying QGen", datetime.datetime.now())
     
@@ -106,7 +114,7 @@ async def lifespan(app):
 
     await redis.aclose()
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=lifespan, openapi_tags=tags_metadata)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost"],
@@ -219,8 +227,8 @@ async def get_db_batch(batch_req: GameBatchReq):
         cursor.close()
         conn.close()       
 
-@app.post("/getbatch/")
-async def serve_game_batch(batch_req: GameBatchReq):
+@app.post("/getbatch/", tags=["getbatch"])
+async def serve_game_batch(batch_req: GameBatchReq) -> GameBatchResp:
     # check cache for unseen q's for client
     # if none, get new batch from db
 
