@@ -108,22 +108,20 @@ const Quiz = () => {
     }, [timeLeft]);
 
     const handleSubmit = async (e) => {
-        console.log("Submit button clicked, sending answer to server:");
-        console.log(answer);
         e.preventDefault();
-        // Submit answer to the server
-        const res = await fetch('/api/submit-answer', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ client_id: myId, answer: answer }), // Add client_id and answer to the request body
-        });
-        const data = await res.json();
-        console.log(data);
-        // Update score based on the response
-        setScore(data.score);
-        handleNextQuestion();
+        console.log("Submit button clicked, answer:", answer);
+        
+        // For now, just increment score by 10 for each answer
+        const newScore = score + 10;
+        setScore(newScore);
+        localStorage.setItem('score', newScore);
+        
+        // Move to next question or results
+        if (currentQuestion.questionNumber >= 5) {
+            navigate('/results');
+        } else {
+            handleNextQuestion();
+        }
     };
 
     const handleNextQuestion = () => {
@@ -133,7 +131,7 @@ const Quiz = () => {
         setShowPanel1(false);
         setShowPanel2(false);
         setShowPanel3(false);
-        initGame(); // Fetch new hints for the next question
+        
         // Update to next sequential question
         setCurrentQuestion(prev => ({
             ...prev,
@@ -154,26 +152,26 @@ const Quiz = () => {
                     </div>
 
                     {/* Panels Section */}
-                    <div className="flex flex-col space-y-6">
+                    <div className="flex flex-col space-y-4">
                         <div className={`transform transition-all duration-500 ${
                             showPanel1 ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
                         }`}>
-                            <div className="bg-yellow-300 rounded-lg p-8 w-full h-32 flex items-center justify-center shadow-lg">
-                                <span className="text-4xl">{Panel1}</span>
+                            <div className="bg-yellow-300 rounded-lg p-4 w-full h-24 flex items-center justify-center shadow-lg">
+                                <span className="text-2xl">{Panel1}</span>
                             </div>
                         </div>
                         <div className={`transform transition-all duration-500 ${
                             showPanel2 ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
                         }`}>
-                            <div className="bg-yellow-300 rounded-lg p-8 w-full h-32 flex items-center justify-center shadow-lg">
-                                <span className="text-4xl">{Panel2}</span>
+                            <div className="bg-yellow-300 rounded-lg p-4 w-full h-24 flex items-center justify-center shadow-lg">
+                                <span className="text-2xl">{Panel2}</span>
                             </div>
                         </div>
                         <div className={`transform transition-all duration-500 ${
                             showPanel3 ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
                         }`}>
-                            <div className="bg-yellow-300 rounded-lg p-8 w-full h-32 flex items-center justify-center shadow-lg">
-                                <span className="text-4xl">{Panel3}</span>
+                            <div className="bg-yellow-300 rounded-lg p-4 w-full h-24 flex items-center justify-center shadow-lg">
+                                <span className="text-2xl">{Panel3}</span>
                             </div>
                         </div>
                     </div>
@@ -187,7 +185,7 @@ const Quiz = () => {
                     </div>
 
                     {/* Answer Section */}
-                    <div className="bg-white rounded-lg p-8 shadow-xl">
+                    <div className="bg-white rounded-lg p-8 shadow-xl mb-8">
                         <form onSubmit={handleSubmit} className="space-y-6">
                             <input
                                 type="text"
@@ -202,11 +200,12 @@ const Quiz = () => {
                             >
                                 Submit
                             </button>
-                            {/* Added to show the score */}
-                            <div className="bg-white rounded-lg p-8 w-full h-32 flex items-center justify-center shadow-lg">
-                                <span className="text-4xl">Score is: {score}</span>
-                            </div>
                         </form>
+                    </div>
+
+                    {/* Score Section */}
+                    <div className="bg-white rounded-lg p-6 shadow-xl">
+                        <div className="text-4xl font-bold text-center text-blue-500">Score: {score}</div>
                     </div>
                 </div>
             </div>
