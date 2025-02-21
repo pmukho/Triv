@@ -6,8 +6,11 @@ COPY requirements.txt .
 
 RUN pip install -r requirements.txt --no-cache-dir
 
+# Install curl
+RUN apt-get update && apt-get install -y curl
+
 COPY . .
 
-EXPOSE 8002
+EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

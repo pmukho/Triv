@@ -1,6 +1,7 @@
 import wikipediaapi
 from openai import OpenAI
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
 
@@ -35,6 +36,12 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def read_root():
@@ -82,6 +89,6 @@ def read_questions(articles: Articles):
     
     return Questions(questions=questions, ok=ok, error=error)
 
-
-
-    
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}

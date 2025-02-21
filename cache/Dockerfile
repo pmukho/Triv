@@ -6,6 +6,9 @@ COPY requirements.txt .
 
 RUN pip install -r requirements.txt --no-cache-dir
 
+# Install curl
+RUN apt-get update && apt-get install -y curl
+
 COPY . .
 
 EXPOSE 8000

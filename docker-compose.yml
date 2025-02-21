@@ -18,6 +18,26 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   cache:
     build:
@@ -30,8 +50,18 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      question-gen:
+        condition: service_healthy
 
   game-factory:
     build:
@@ -45,21 +75,30 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     depends_on:
-      - db
-      - cache
+      cache:
+        condition: service_healthy
 
-  question_gen:
+  question-gen:
     build:
       context: ./question_gen
       dockerfile: Dockerfile
-    container_name: question_gen
+    container_name: question-gen
     ports:
-      - "8002:8002"
+      - "8002:8000"
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-
-    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 networks:
   project:
     driver: bridge
+
+volumes:
+  db-data:
+    driver: local
+  redis-data:
+    driver: local
