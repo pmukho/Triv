@@ -74,9 +74,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-    depends_on:
-      cache:
-        condition: service_healthy
 
   question-gen:
     build:
