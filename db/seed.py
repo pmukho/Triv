@@ -19,6 +19,7 @@ psid_to_category = {
     "32149981": "Technology",
 }
 
+# Fetch data from wikipedia API by psid
 def fetch_petscan_data(psid: str):
     base_url = "https://petscan.wmcloud.org/psapi.php"
     params = {
@@ -30,16 +31,10 @@ def fetch_petscan_data(psid: str):
         response = requests.get(base_url, params=params)
         response.raise_for_status()
         data = response.json()
-        
-        # Enhanced debugging
-        print(f"Response status code: {response.status_code}")
-        print(f"Response type: {type(data)}")
-        print(f"Top level structure: {list(data.keys()) if isinstance(data, dict) else 'List of length ' + str(len(data))}")
-        print("First level data sample:", json.dumps(data, indent=2)[:1000]) 
-        
+
         articles = []
         
-        # Handle the specific nested structure we've observed
+        # Extract title and category from response
         if isinstance(data, dict) and '*' in data and isinstance(data['*'], list):
             for outer_item in data['*']:
                 if isinstance(outer_item, dict) and 'a' in outer_item:
@@ -51,12 +46,6 @@ def fetch_petscan_data(psid: str):
                                     'title': article['title'].replace('_', ' '),
                                     'category': psid_to_category.get(psid, 'Unknown')
                                 })
-        
-        print(f"Processed {len(articles)} articles")
-        if articles:
-            print("Sample articles:", articles[:3])
-        else:
-            print("No articles were extracted from the response")
             
         return articles
             
@@ -68,7 +57,6 @@ def fetch_petscan_data(psid: str):
         return []
     except Exception as e:
         print(f"Unexpected error: {str(e)}")
-        print(f"Full error details: {type(e).__name__}")
         return []
 
 def connect_to_db() -> psycopg2.extensions.connection:
@@ -80,7 +68,7 @@ def connect_to_db() -> psycopg2.extensions.connection:
 def insert_articles(conn: psycopg2.extensions.connection, articles: List[Dict]):
     with conn.cursor() as cur:
         query = """
-            INSERT INTO wikipedia_articles (title, category)
+            INSERT INTO wiki_articles (title, category)
             VALUES (%s, %s)
             ON CONFLICT (title) DO UPDATE 
             SET category = EXCLUDED.category
@@ -95,7 +83,7 @@ def insert_articles(conn: psycopg2.extensions.connection, articles: List[Dict]):
     conn.commit()
 
 def main():
-    psid = "23645371"  # Replace with your PSID
+    psid = "23645371"  # Add handling for multiple categories later
     try:
         print("Fetching data from PetScan...")
         articles = fetch_petscan_data(psid)
@@ -105,23 +93,16 @@ def main():
             print("No articles found. Exiting.")
             return
         
-        print("\nSample of first 3 articles:")
-        for article in articles[:3]:
-            print(f"Title: {article['title']}, Category: {article['category']}")
-        
-        print("\nConnecting to database...")
         conn = connect_to_db()
-        
-        print("Inserting articles...")
         insert_articles(conn, articles)
         print("Successfully inserted articles into database")
         
         with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM wikipedia_articles")
+            cur.execute("SELECT COUNT(*) FROM wiki_articles")
             count = cur.fetchone()[0]
             print(f"\nTotal articles in database: {count}")
             
-            cur.execute("SELECT title, category FROM wikipedia_articles LIMIT 3")
+            cur.execute("SELECT title, category FROM wiki_articles LIMIT 3")
             print("\nSample entries in database:")
             for row in cur.fetchall():
                 print(f"Title: {row[0]}, Category: {row[1]}")
