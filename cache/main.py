@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncio
 import redis.asyncio as redis
@@ -6,6 +7,7 @@ from pydantic import BaseModel
 import psycopg2
 import os
 import datetime
+import httpx
 
 DB_CONFIG = {
     "dbname": os.environ.get("POSTGRES_DB"),
@@ -43,21 +45,58 @@ class Question(BaseModel):
 class GameBatchResp(BaseModel):
     batch: list[Question]
 
-async def notify_qgen():
-    while True:
-        # just looking at ouput of docker-compose up, its not entire clear
-        # that print stmts are coming from this function until some 
-        # endpoint is hit (print messages are buffered until then)
-        print("Notifying QGen", datetime.datetime.now())
-        # make request to QGen here (prob need to connect to some global/traffic related state here)
-        await asyncio.sleep(5)
+async def generate_questions():
+    print("Notifying QGen", datetime.datetime.now())
+    
+    articles_map = {
+        "Usain_Bolt": "PEOPLE",
+        "Babe_Ruth": "PEOPLE",
+        "Christopher_Columbus": "PEOPLE",
+        "Albert_Einstein": "PEOPLE",
+        "Moment_of_inertia": "SCIENCE",
+        "Surface_tension": "SCIENCE",
+        "Water": "SCIENCE",
+        "Rainbow": "SCIENCE"
+    }
+    
+    articles = list(articles_map.keys())
+    payload = {
+        "article_names": articles
+    }
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post("http://question-gen:8000/questions", json=payload, timeout=120.0)
+            response.raise_for_status()
+            print("Successfully notified QGen")
+            print("Response: ", response.json())
+
+            # write questions to db
+            questions = response.json()["questions"]
+            print("Writing questions to db")
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            for i in range(len(questions)):
+                q=questions[i]
+                id = str(100+i)
+                category = articles_map[articles[i]]
+                
+                cursor.execute("""
+                    INSERT INTO questions (id, category, hint1, hint2, hint3, answer)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (id, category, q["prompt1"], q["prompt2"], q["prompt3"], q["answer"]))
+            conn.commit()
+            cursor.close()
+            conn.close()
+            print("Finished writing questions to db")
+        except Exception as e:
+            print(f"Error notifying QGen: {e}")
 
 @asynccontextmanager
 async def lifespan(app):
     print("Starting up")
 
-    # background task that runs periodically
-    # asyncio.create_task(notify_qgen())
+    await generate_questions()
 
     global redis_client
     redis_client = await redis.from_url("redis://redis:6379/0")
@@ -68,6 +107,12 @@ async def lifespan(app):
     await redis.aclose()
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"]
+)
 
 @app.get("/")
 async def read_root():
@@ -187,3 +232,6 @@ async def serve_game_batch(batch_req: GameBatchReq):
     db_results = await get_db_batch(fwd_req)
     return GameBatchResp(batch=cached_qs + db_results)
 
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
