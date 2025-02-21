@@ -71,11 +71,11 @@ services:
       - db
       - cache
 
-  question_gen:
+  question-gen:
     build:
       context: ./question_gen
       dockerfile: Dockerfile
-    container_name: question_gen
+    container_name: question-gen
     ports:
       - "8002:8002"
     environment:
