@@ -35,6 +35,7 @@ frontend/
 │   │   ├── Login.js        # User authentication component
 │   │   ├── Quiz.js         # Main quiz interface
 │   │   ├── Leaderboard.js  # Leaderboard display
+│   │   ├── UserInputTest.js # User input testing component
 │   │   └── ParticlesBackground.js    # Background animation component
 │   ├── styles/
 │   │   └── index.css       # Global styles and Tailwind imports
@@ -82,9 +83,10 @@ npm run build
 
 ## Navigation
 
-The app consists of three main pages:
+The app consists of four main pages:
 1. **Login Page**: Entry point where users enter their name and email
 2. **Quiz Page**: Interactive quiz interface with timed questions and hints
 3. **Leaderboard Page**: Displays player rankings and animated score display
+4. **User Input Test Page**: Testing interface for user inputs
 
 Each page is responsive and features the animated particle background.

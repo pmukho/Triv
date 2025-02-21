@@ -5,6 +5,7 @@ import Login from "./components/Login";
 import Leaderboard from "./components/Leaderboard";
 import Quiz from "./components/Quiz";
 import UserInputTest from "./components/UserInputTest";
+import Results from "./components/Results";
 
 import "./index.css";
 
@@ -16,6 +17,7 @@ root.render(
             <Routes>
                 <Route path="/" element={<Login />} />
                 <Route path="/quiz" element={<Quiz />} />
+                <Route path="/results" element={<Results />} />
                 <Route path="/leaderboard" element={<Leaderboard />} />
                 <Route path="/userinputtest" element={<UserInputTest/>} />
             </Routes>
