@@ -2,10 +2,7 @@ fastapi
 uvicorn
 pydantic
 psycopg2-binary
-<<<<<<< HEAD
 redis
 pytest
 httpx
-=======
-redis
->>>>>>> 6b10ec8 (Simple check of redis before db)
+
