@@ -17,6 +17,14 @@ psid_to_category = {
     "23645371": "People",
     "32149945": "History",
     "32149981": "Technology",
+    "32503216": "Geography",
+    "32499086": "Everyday Life",
+    "32503318": "Philosophy/Religion",
+    "32503419": "Arts",
+    "32503569": "Society/Social Sciences",
+    "32503733": "Biology/Health Sciences",
+    "32503805": "Physical Sciences",
+    "32504022": "Mathematics"
 }
 
 # Fetch data from wikipedia API by psid
@@ -83,35 +91,35 @@ def insert_articles(conn: psycopg2.extensions.connection, articles: List[Dict]):
     conn.commit()
 
 def main():
-    psid = "23645371"  # Add handling for multiple categories later
-    try:
-        print("Fetching data from PetScan...")
-        articles = fetch_petscan_data(psid)
-        print(f"Found {len(articles)} articles")
-        
-        if not articles:
-            print("No articles found. Exiting.")
-            return
-        
-        conn = connect_to_db()
-        insert_articles(conn, articles)
-        print("Successfully inserted articles into database")
-        
-        with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM wiki_articles")
-            count = cur.fetchone()[0]
-            print(f"\nTotal articles in database: {count}")
+    for psid in psid_to_category.keys():
+        try:
+            print("Fetching data from PetScan...")
+            articles = fetch_petscan_data(psid)
+            print(f"Found {len(articles)} articles")
             
-            cur.execute("SELECT title, category FROM wiki_articles LIMIT 3")
-            print("\nSample entries in database:")
-            for row in cur.fetchall():
-                print(f"Title: {row[0]}, Category: {row[1]}")
-        
-    except Exception as e:
-        print(f"Error: {e}")
-    finally:
-        if 'conn' in locals():
-            conn.close()
+            if not articles:
+                print("No articles found. Exiting.")
+                return
+            
+            conn = connect_to_db()
+            insert_articles(conn, articles)
+            print("Successfully inserted articles into database")
+            
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM wiki_articles")
+                count = cur.fetchone()[0]
+                print(f"\nTotal articles in database: {count}")
+                
+                cur.execute("SELECT title, category FROM wiki_articles LIMIT 3")
+                print("\nSample entries in database:")
+                for row in cur.fetchall():
+                    print(f"Title: {row[0]}, Category: {row[1]}")
+            
+        except Exception as e:
+            print(f"Error: {e}")
+        finally:
+            if 'conn' in locals():
+                conn.close()
 
 if __name__ == "__main__":
     main()
