@@ -41,6 +41,11 @@ async def submit_answer(answer: Answer):
     is_correct,score = await gm.check_answer(answer.answer)
     return {"correct": is_correct, "score": score}
 
+@app.post("/api/end-game")
+async def end_game(client: ClientId):
+    gm_id = gmFactory.end_game(client.client_id)
+    return {"status": "Game Master deleted", "gm_id": gm_id}
+
 # @app.post("/{client_id}/downvote")
 # async def downvote_question(client_id: str, downvote: DownVote):
 #     gm = get_or_create_game_master(client_id)

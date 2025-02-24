@@ -56,6 +56,23 @@ const submitAnswer = async (clientId, answer) => {
     }
 };
 
+const endGame = async (clientId) => {
+    try {
+        const res = await fetch('/api/end-game', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ client_id: clientId }),
+        });
+        const data = await res.json();
+        return data; // Return the API response
+    } catch (error) {
+        console.error('Error:', error);
+        return { error: "An error occurred while ending the game." };
+    }
+};
+
 const Quiz = () => {
     const navigate = useNavigate();
     const [timeLeft, setTimeLeft] = useState(30);
@@ -143,6 +160,7 @@ const Quiz = () => {
 
     const handleNextQuestion = () => {
         if (currentQuestion.questionNumber >= 5) {
+            endGame(myId);
             navigate('/results');
         }
         // Reset state for next question

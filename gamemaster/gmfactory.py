@@ -30,10 +30,18 @@ class GmFactory:
         self.game_masters = {}
         # Initialize the game_master_number to 0, could cause issues with too many game masters
         self.game_master_number = 0
+        
     def get_or_create_game_master(self, client_id: int) -> int:
         if client_id not in self.game_masters:
             self.game_masters[client_id] = GameMaster(client_id, self.game_master_number)
+            print(f"Game Master {self.game_master_number} with client_id: {client_id} created")
             self.game_master_number += 1
-            print(f"Game Master with client_id: {client_id} created")
         return client_id
+    
+    def end_game(self, client_id):
+        gm = self.game_masters.get(client_id)
+        gm_id = gm.id
+        del self.game_masters[client_id]
 
+        print(f"Game Master {gm_id} with client_id: {client_id} deleted")
+        return gm_id
