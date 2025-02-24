@@ -18,26 +18,30 @@ class Answer(BaseModel):
     client_id: int
     answer: str
 
-
 class ClientId(BaseModel):
     client_id: int
+    
+class MaxQuestions(BaseModel):
+    max_questions: int
+    
 gmFactory = GmFactory()
 
 
 @ app.post("/api/start-game")
-async def start_game(client: ClientId):
-    gm_id = gmFactory.game_masters[gmFactory.get_or_create_game_master(client.client_id)]
+async def start_game(client: ClientId, max_questions: MaxQuestions):
+    gm_id = gmFactory.game_masters[gmFactory.get_or_create_game_master(client.client_id, max_questions)]
     return {"status": "Game Master created", "gm_id": gm_id}
+
 @app.post("/api/request-hints")
-async def request_hints(client: ClientId):
-    gm = gmFactory.game_masters[gmFactory.get_or_create_game_master(client.client_id)]
+async def request_hints(client: ClientId, max_questions: MaxQuestions):
+    gm = gmFactory.game_masters[gmFactory.get_or_create_game_master(client.client_id, max_questions)]
     hints,hints_complete = await gm.get_hints()
     return {"hints": hints, "hints_complete": hints_complete}
 
 @app.post("/api/submit-answer")
-async def submit_answer(answer: Answer):
+async def submit_answer(answer: Answer, max_questions: MaxQuestions):
     print(f"Received answer: {answer.answer} from client: {answer.client_id}")
-    gm = gmFactory.game_masters[gmFactory.get_or_create_game_master(answer.client_id)]
+    gm = gmFactory.game_masters[gmFactory.get_or_create_game_master(answer.client_id, max_questions)]
     is_correct,score = await gm.check_answer(answer.answer)
     return {"correct": is_correct, "score": score}
 

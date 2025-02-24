@@ -31,9 +31,9 @@ class GmFactory:
         # Initialize the game_master_number to 0, could cause issues with too many game masters
         self.game_master_number = 0
         
-    def get_or_create_game_master(self, client_id: int) -> int:
+    def get_or_create_game_master(self, client_id: int, max_questions: int) -> int:
         if client_id not in self.game_masters:
-            self.game_masters[client_id] = GameMaster(client_id, self.game_master_number)
+            self.game_masters[client_id] = GameMaster(client_id, self.game_master_number, max_questions)
             print(f"Game Master {self.game_master_number} with client_id: {client_id} created")
             self.game_master_number += 1
         return client_id

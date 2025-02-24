@@ -7,16 +7,18 @@ import re
 import difflib
 
 CACHE_SERVICE_URL = "http://cache:8000"
-MIN_ANSWER_SIMILARITY = 0.8 
-MIN_TOKEN_SIMILARITY = 0.3
+MIN_ANSWER_SIMILARITY = 0.8
+MIN_TOKEN_SIMILARITY = 0.5
+DEFAULT_MAX_QUESTIONS = 5
 
 class GameMaster:
-    def __init__(self, client_id, gm_instance_id):
+    def __init__(self, client_id, gm_instance_id, max_questions=DEFAULT_MAX_QUESTIONS):
         self.client_id = client_id
         self.current_question = 0
         self.score = 0
         self.id = gm_instance_id
         self.questions = []
+        self.max_questions = max_questions
 
     async def load_questions(self):
         # Load batch from cache

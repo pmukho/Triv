@@ -2,17 +2,18 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ParticlesBackground from './ParticlesBackground';
 import { useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 
 const myId = Math.floor(Math.random() * 100); // Placeholder for the client ID, ideally should be ip address or some unique identifier
 
-const start_game = async () => {
+const start_game = async (maxQuestions) => {
     try {
         const res = await fetch('/api/start-game', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ client_id: myId }),// Add client_id to the request body, make actual value dynamic
+            body: JSON.stringify({ client_id: myId, max_questions: maxQuestions }), // Add client_id to the request body, make actual value dynamic
         });
         const data = await res.json();
         return data; // Return the API response
@@ -22,14 +23,14 @@ const start_game = async () => {
     }
 };
 
-const request_hints = async (clientId) => {
+const request_hints = async (clientId, maxQuestions) => {
     try {
         const res = await fetch('/api/request-hints', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ client_id: clientId }), // Use the clientId parameter
+            body: JSON.stringify({ client_id: clientId, max_questions: maxQuestions }), // Use the clientId parameter
         });
         const data = await res.json();
         return data; // Return the API response
@@ -39,14 +40,14 @@ const request_hints = async (clientId) => {
     }
 }
 
-const submitAnswer = async (clientId, answer) => {
+const submitAnswer = async (clientId, maxQuestions, answer) => {
     try {
         const res = await fetch('/api/submit-answer', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ client_id: clientId, answer: answer }),
+            body: JSON.stringify({ client_id: clientId, max_questions: maxQuestions, answer: answer }),
         });
         const data = await res.json();
         return data; // Return the API response
@@ -75,6 +76,7 @@ const endGame = async (clientId) => {
 
 const Quiz = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [timeLeft, setTimeLeft] = useState(30);
     const [answer, setAnswer] = useState('');
     const [showPanel1, setShowPanel1] = useState(false);
@@ -84,6 +86,9 @@ const Quiz = () => {
     const [showPanel2, setShowPanel2] = useState(false);
     const [showPanel3, setShowPanel3] = useState(false);
     const [score, setScore] = useState(0);
+
+    const maxQuestions = location.state?.maxQuestions || 5;
+
     // Placeholder for question data
     const [currentQuestion, setCurrentQuestion] = useState({
         question: "Question 1",
@@ -91,8 +96,8 @@ const Quiz = () => {
         // Add other question properties as needed
     });
     const initGame = async () => {
-        await start_game();
-        const hintData = await request_hints(myId);
+        await start_game(maxQuestions);
+        const hintData = await request_hints(myId, maxQuestions);
         console.log("got hint data");
         console.log(hintData);
         if (hintData.hints) {
@@ -146,7 +151,7 @@ const Quiz = () => {
         console.log("Submit button clicked, answer:", answer);
         
         // Call gamemaster to check answer
-        const result = await submitAnswer(myId, answer);
+        const result = await submitAnswer(myId, maxQuestions, answer);
         console.log("Answer check result:", result);
         const newScore = result.score * 10
         if (result && result.score !== undefined) {
@@ -159,7 +164,7 @@ const Quiz = () => {
     };
 
     const handleNextQuestion = () => {
-        if (currentQuestion.questionNumber >= 5) {
+        if (currentQuestion.questionNumber >= maxQuestions) {
             endGame(myId);
             navigate('/results');
         }
