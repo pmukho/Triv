@@ -39,6 +39,23 @@ const request_hints = async (clientId) => {
     }
 }
 
+const submitAnswer = async (clientId, answer) => {
+    try {
+        const res = await fetch('/api/submit-answer', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ client_id: clientId, answer: answer }),
+        });
+        const data = await res.json();
+        return data; // Return the API response
+    } catch (error) {
+        console.error('Error:', error);
+        return { error: "An error occurred while submitting the answer." };
+    }
+};
+
 const Quiz = () => {
     const navigate = useNavigate();
     const [timeLeft, setTimeLeft] = useState(30);
@@ -111,20 +128,23 @@ const Quiz = () => {
         e.preventDefault();
         console.log("Submit button clicked, answer:", answer);
         
-        // For now, just increment score by 10 for each answer
-        const newScore = score + 10;
-        setScore(newScore);
-        localStorage.setItem('score', newScore);
+        // Call gamemaster to check answer
+        const result = await submitAnswer(myId, answer);
+        console.log("Answer check result:", result);
+        const newScore = result.score * 10
+        if (result && result.score !== undefined) {
+            setScore(newScore);
+            localStorage.setItem('score', newScore);
+        }
         
         // Move to next question or results
-        if (currentQuestion.questionNumber >= 5) {
-            navigate('/results');
-        } else {
-            handleNextQuestion();
-        }
+        handleNextQuestion();
     };
 
     const handleNextQuestion = () => {
+        if (currentQuestion.questionNumber >= 5) {
+            navigate('/results');
+        }
         // Reset state for next question
         setTimeLeft(30);
         setAnswer('');
