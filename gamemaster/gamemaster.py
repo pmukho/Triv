@@ -3,8 +3,12 @@ from pydantic import BaseModel
 import uvicorn
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
+import re
+import difflib
 
 CACHE_SERVICE_URL = "http://cache:8000"
+MIN_ANSWER_SIMILARITY = 0.8 
+MIN_TOKEN_SIMILARITY = 0.3
 
 class GameMaster:
     def __init__(self, client_id, gm_instance_id):
@@ -46,6 +50,37 @@ class GameMaster:
         else:
             return [], False
     
+    def _normalize_answer(self, answer):
+        STOP_WORDS = set(["the", "a", "an", "of", "in", "on", "at", "and", "or", "but", "from"])
+        answer = answer.lower()
+        answer = re.sub(r'[^\w\s]', '', answer) # remove non-words and non-whitespace
+        tokens = answer.split()
+        tokens = [token for token in tokens if token not in STOP_WORDS] # filter out common words
+        return tokens
+    
+    def _advanced_answer_check(self, user_answer, correct_answer, threshold = MIN_ANSWER_SIMILARITY):
+        user_tokens = self._normalize_answer(user_answer)
+        correct_tokens = self._normalize_answer(correct_answer)
+        
+        if not user_tokens:
+            return False
+
+        if len(user_tokens) == 1:
+            if user_tokens[0] in correct_tokens:
+                return True
+
+        user_str = ' '.join(user_tokens)
+        correct_str = ' '.join(correct_tokens)
+        ratio = difflib.SequenceMatcher(None, user_str, correct_str).ratio() # for spelling errors
+        if ratio >= threshold:
+            return True
+
+        common_tokens = set(user_tokens) & set(correct_tokens) # for partial word match
+        if len(common_tokens) >= len(user_tokens) * MIN_TOKEN_SIMILARITY:
+            return True 
+
+        return False
+
     async def check_answer(self, answer):
         # Implement logic to check the answer
         await self.load_questions()
@@ -54,7 +89,7 @@ class GameMaster:
             q = self.questions[self.current_question]
             correct_answer = q["answer"]
 
-            if answer.lower() == correct_answer.lower():
+            if self._advanced_answer_check(answer, correct_answer):
                 self.score += 1
                 result = True
             else:
