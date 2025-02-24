@@ -153,52 +153,5 @@ async def send_hints_timed(game_master, client_id: int):
     except Exception as e:
         print(f"Error sending hints to client {client_id}: {e}")
 
-
-@ app.post("/api/start-game")
-async def start_game(client: ClientId, max_questions: MaxQuestions):
-    gm_id = gmFactory.game_masters[gmFactory.get_or_create_game_master(client.client_id, max_questions)]
-    return {"status": "Game Master created", "gm_id": gm_id}
-
-@app.post("/api/request-hints")
-async def request_hints(client: ClientId, max_questions: MaxQuestions):
-    gm = gmFactory.game_masters[gmFactory.get_or_create_game_master(client.client_id, max_questions)]
-    hints,hints_complete = await gm.get_hints()
-    return {"hints": hints, "hints_complete": hints_complete}
-
-@app.post("/api/submit-answer")
-async def submit_answer(answer: Answer, max_questions: MaxQuestions):
-    print(f"Received answer: {answer.answer} from client: {answer.client_id}")
-    gm = gmFactory.game_masters[gmFactory.get_or_create_game_master(answer.client_id, max_questions)]
-    is_correct,score = await gm.check_answer(answer.answer)
-    return {"correct": is_correct, "score": score}
-
-@app.post("/api/end-game")
-async def end_game(client: ClientId):
-    gm_id = gmFactory.end_game(client.client_id)
-    return {"status": "Game Master deleted", "gm_id": gm_id}
-
-# @app.post("/{client_id}/downvote")
-# async def downvote_question(client_id: str, downvote: DownVote):
-#     gm = get_or_create_game_master(client_id)
-#     await gm.downvote_question()
-#     return {"status": "Downvote recorded"}
-
-
-# @app.post("/{client_id}/data")
-# async def send_data(client_id: str, data: Data):
-#     # Implement data handling logic
-#     return {"status": "Data sent successfully"}
-
-@app.post("/api/user-input")
-async def receive_user_input(user_input: UserInput):
-    # You can process the data here as needed
-    print(f"Received user input: {user_input.userInput}")
-    # Example response
-    response = {
-        "status": "success",
-        "message": f"Received input: {user_input.userInput}"
-    }
-    return response
-
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
