@@ -153,5 +153,3 @@ async def send_hints_timed(game_master, client_id: int):
     except Exception as e:
         print(f"Error sending hints to client {client_id}: {e}")
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
