@@ -89,7 +89,7 @@ const Quiz = () => {
 
   // WebSocket connection management
   useEffect(() => {
-    const wsUrl = `ws://localhost/ws/quiz/${myId}?${maxQuestions}`;
+    const wsUrl = `/ws/quiz/${myId}?${maxQuestions}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
