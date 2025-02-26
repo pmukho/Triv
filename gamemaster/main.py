@@ -123,10 +123,14 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
 async def send_hints_timed(game_master, client_id: int):
     try:
         # Fetch hints
-        hints, has_question = await game_master.get_hints()
-        if not has_question or len(hints) < 3:
-            print("Not enough hints available.")
-            return
+        while True:
+            hints, has_question = await game_master.get_hints()
+            if has_question and len(hints) >= 3:
+                break
+
+            # Wait & retry
+            print(f"No questions available for client {client_id}. Retrying in 5s...")
+            await asyncio.sleep(5)
 
         # Immediately send hint #1
         await manager.send_message(client_id, {

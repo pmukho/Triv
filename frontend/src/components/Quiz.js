@@ -4,9 +4,9 @@ import ParticlesBackground from './ParticlesBackground';
 
 const myId = Math.floor(Math.random() * 100);
 const DEFAULT_PANELS = {
-  1: { content: '', visible: false },
-  2: { content: '', visible: false },
-  3: { content: '', visible: false }
+  1: { content: 'Loading...', visible: true },
+  2: { content: 'Loading...', visible: false },
+  3: { content: 'Loading...', visible: false }
 };
 
 const HintPanels = ({ panels }) => {
@@ -32,6 +32,7 @@ const Quiz = () => {
   const [timeLeft, setTimeLeft] = useState(30);
   const [answer, setAnswer] = useState('');
   const [panels, setPanels] = useState(DEFAULT_PANELS);
+  const [loadingHints, setLoadingHints] = useState(true);
   const [score, setScore] = useState(0);
 
   const maxQuestions = location.state?.maxQuestions || 5;
@@ -50,14 +51,27 @@ const Quiz = () => {
   // Update panels with a new hint
   const handleNewHint = useCallback((hint) => {
     setPanels((prev) => {
-      const nextPanelKey =
-        Object.entries(prev).find(([_, panel]) => !panel.visible)?.[0] || '1';
-      return {
-        ...prev,
-        [nextPanelKey]: { content: hint, visible: true },
-      };
+      const placeholderEntry = Object.entries(prev).find(
+        ([, panel]) => panel.content === 'Loading...'
+      );
+
+      if (placeholderEntry) {
+        const [placeholderKey] = placeholderEntry;
+        return {
+          ...prev,
+          [placeholderKey]: { content: hint, visible: true },
+        };
+      } else {
+        const nextPanelKey =
+          Object.entries(prev).find(([_, panel]) => !panel.visible)?.[0] || '1';
+        return {
+          ...prev,
+          [nextPanelKey]: { content: hint, visible: true },
+        };
+      }
     });
   }, []);
+  
 
   // Handle answer results from the server
   const handleAnswerResult = useCallback((isCorrect, rawScore) => {
@@ -72,6 +86,7 @@ const Quiz = () => {
     (message) => {
       switch (message.type) {
         case 'hint':
+          if (loadingHints) setLoadingHints(false);
           handleNewHint(message.hint);
           break;
         case 'answer_result':
@@ -84,7 +99,7 @@ const Quiz = () => {
           break;
       }
     },
-    [handleNewHint, handleAnswerResult]
+    [handleNewHint, handleAnswerResult, loadingHints]
   );
 
   // WebSocket connection management
@@ -113,10 +128,12 @@ const Quiz = () => {
       sendMessage('end_game', {});
       ws.close();
     };
-  }, [handleServerMessage, sendMessage]);
+  }, []);
 
   // Timer management
   useEffect(() => {
+    if (loadingHints) return;
+
     if (timeLeft <= 0) {
       sendMessage('start_question', {});
       handleNextQuestion();
@@ -124,7 +141,7 @@ const Quiz = () => {
     }
     const timerId = setTimeout(() => setTimeLeft((prev) => prev - 1), 1000);
     return () => clearTimeout(timerId);
-  }, [timeLeft]);
+  }, [timeLeft, loadingHints]);
 
   // Move to the next question or navigate to results if done
   const handleNextQuestion = useCallback(() => {
@@ -142,6 +159,7 @@ const Quiz = () => {
     });
     setTimeLeft(30);
     setPanels(DEFAULT_PANELS);
+    setLoadingHints(true);
   }, [navigate]);
   
 
@@ -165,7 +183,7 @@ const Quiz = () => {
             </h2>
           </div>
           <div className="flex flex-col space-y-4">
-            <HintPanels panels={panels}/>
+            <HintPanels panels={panels} loading={loadingHints}/>
           </div>
         </div>
         {/* Right Half */}
@@ -184,10 +202,12 @@ const Quiz = () => {
                         onChange={(e) => setAnswer(e.target.value)}
                         placeholder="Type Your Answer here"
                         className="w-full p-4 text-xl border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={loadingHints}                        
                     />
                     <button
                         type="submit"
                         className="w-full bg-blue-500 text-white py-4 text-xl rounded-md font-bold hover:bg-blue-600 transition"
+                        disabled={loadingHints}
                     >
                         Submit
                     </button>
