@@ -98,13 +98,29 @@ class GameMaster:
                 result = False
 
             self.current_question += 1
-            return result, self.score
+            return result, self.score, correct_answer, [q["hint1"], q["hint2"], q["hint3"]]
         else:
-            return False, self.score
+            return False, self.score, correct_answer, [q["hint1"], q["hint2"], q["hint3"]]
         
     async def downvote_question(self):
         # Implement logic to downvote the current question
-        pass
+        index = self.current_question - 1
+        if 0 <= index < len(self.questions):
+            question = self.questions[index]
+            payload = {
+                "user_id": str(self.client_id),
+                "question_id": question["id"]
+                }
+
+            # async with httpx.AsyncClient() as client:
+            #     try:
+            #         response = await client.post(f"{CACHE_SERVICE_URL}/downvote/", json=payload)
+            #         response.raise_for_status()
+            #         self.questions = response.json()["batch"]
+            #     except Exception as e:
+            #         print("Error downvoting question:", e)
+            
+        return question["id"]
     
     async def send_hints(self, hints):
         # Implement logic to send hints
