@@ -63,3 +63,7 @@ CREATE TABLE IF NOT EXISTS wiki_articles (
     title TEXT PRIMARY KEY,
     category TEXT NOT NULL
 );
+
+COPY wiki_articles(title, category) 
+FROM '/docker-entrypoint-initdb.d/data/wiki_articles.csv' 
+DELIMITER ',' CSV HEADER;

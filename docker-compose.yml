@@ -13,7 +13,7 @@ services:
   db:
     build:
       context: ./db
-      dockerfile: Dockerfile.db
+      dockerfile: Dockerfile
     container_name: postgres-db
     ports:
       - "5433:5432"
@@ -22,6 +22,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - db-data:/var/lib/postgresql/data
+      - ./seedtool/db/data:/docker-entrypoint-initdb.d/data
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}"]
       interval: 10s
@@ -41,15 +42,15 @@ services:
       timeout: 5s
       retries: 5
 
-  db-seeder:
-    build:
-      context: .
-      dockerfile: db/Dockerfile.seed
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    depends_on:
-      - db
+  # db-seeder:
+  #   build:
+  #     context: .
+  #     dockerfile: db/Dockerfile.seed
+  #   environment:
+  #     - POSTGRES_USER=${POSTGRES_USER}
+  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+  #   depends_on:
+  #     - db
 
   cache:
     build:
