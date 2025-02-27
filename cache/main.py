@@ -14,7 +14,7 @@ DB_CONFIG = {
     "user": os.environ.get("POSTGRES_USER"),
     "password": os.environ.get("POSTGRES_PASSWORD"),
     "host": "postgres-db",
-    "port": "5433"
+    "port": "5432"
 }
 
 def get_db_connection():
@@ -169,7 +169,7 @@ async def get_db_batch(batch_req: GameBatchReq):
             LIMIT %s)
         """
         queries.append(query)
-        params.extend([user_id, elem.category, batch_req.batch_size])
+        params.extend([user_id, elem.category, elem.count])       
     query = " UNION ALL ".join(queries)
     print("Query: ", query)
     
@@ -216,8 +216,11 @@ async def get_db_batch(batch_req: GameBatchReq):
         print(e)
         return {"error": "Failed to fetch questions"}
     finally:
-        cursor.close()
-        conn.close()       
+        try:
+            cursor.close()
+            conn.close()
+        except NameError:
+            pass
 
 @app.post("/getbatch/")
 async def serve_game_batch(batch_req: GameBatchReq):

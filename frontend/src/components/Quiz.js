@@ -1,215 +1,226 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import ParticlesBackground from './ParticlesBackground';
-import { useCallback } from 'react';
 
-const myId = Math.floor(Math.random() * 100); // Placeholder for the client ID, ideally should be ip address or some unique identifier
-
-const start_game = async () => {
-    try {
-        const res = await fetch('/api/start-game', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ client_id: myId }),// Add client_id to the request body, make actual value dynamic
-        });
-        const data = await res.json();
-        return data; // Return the API response
-    } catch (error) {
-        console.error('Error:', error);
-        return { error: "An error occurred while starting the game." };
-    }
+const myId = Math.floor(Math.random() * 100);
+const DEFAULT_PANELS = {
+  1: { content: 'Loading...', visible: true },
+  2: { content: 'Loading...', visible: false },
+  3: { content: 'Loading...', visible: false }
 };
 
-const request_hints = async (clientId) => {
-    try {
-        const res = await fetch('/api/request-hints', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ client_id: clientId }), // Use the clientId parameter
-        });
-        const data = await res.json();
-        return data; // Return the API response
-    } catch (error) {
-        console.error('Error:', error);
-        return { error: "An error occurred while requesting a hint." };
-    }
-}
+const HintPanels = ({ panels }) => {
+  return (
+    <>
+      {Object.keys(panels).map((panelKey) => (
+        <div key={panelKey} className={`transform transition-all duration-500 ${panels[panelKey].visible? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0' }`}>
+          <div className="bg-yellow-300 rounded-lg p-4 w-full h-24 flex items-center justify-center shadow-lg">
+            <span className="text-2xl">{panels[panelKey].content}</span>
+          </div>
+        </div>
+      ))}
+    </>
+  );
+};
 
 const Quiz = () => {
-    const navigate = useNavigate();
-    const [timeLeft, setTimeLeft] = useState(30);
-    const [answer, setAnswer] = useState('');
-    const [showPanel1, setShowPanel1] = useState(false);
-    const [Panel1, setPanel1] = useState('Not Loaded Yet');
-    const [Panel2, setPanel2] = useState('Not Loaded Yet');
-    const [Panel3, setPanel3] = useState('Not Loaded Yet');
-    const [showPanel2, setShowPanel2] = useState(false);
-    const [showPanel3, setShowPanel3] = useState(false);
-    const [score, setScore] = useState(0);
-    // Placeholder for question data
-    const [currentQuestion, setCurrentQuestion] = useState({
-        question: "Question 1",
-        questionNumber: 1,  // Add this to track question number
-        // Add other question properties as needed
-    });
-    const initGame = async () => {
-        await start_game();
-        const hintData = await request_hints(myId);
-        console.log("got hint data");
-        console.log(hintData);
-        if (hintData.hints) {
-            console.log("got hints and they are in if statement");
-            console.log(hintData.hints);
-            setPanel1(hintData.hints[0]);
-            setPanel2(hintData.hints[1]);
-            setPanel3(hintData.hints[2]);
-        }
-    };
+  const navigate = useNavigate();
+  const location = useLocation();
 
-    useEffect(() => {
-        console.log("Init game being called");
-        initGame();
-    }, [currentQuestion]);
+  const wsRef = useRef(null);
 
-    useEffect(() => {
-        setShowPanel1(true);
-        // Show second panel after 10 seconds
-        const timer2 = setTimeout(() => {
-            setShowPanel2(true);
-        }, 10000);
+  const [timeLeft, setTimeLeft] = useState(30);
+  const [answer, setAnswer] = useState('');
+  const [panels, setPanels] = useState(DEFAULT_PANELS);
+  const [loadingHints, setLoadingHints] = useState(true);
+  const [score, setScore] = useState(0);
 
-        // Show third panel after 20 seconds
-        const timer3 = setTimeout(() => {
-            setShowPanel3(true);
-        }, 20000);
+  const maxQuestions = location.state?.maxQuestions || 5;
+  const [currentQuestion, setCurrentQuestion] = useState({
+    question: 'Question 1',
+    questionNumber: 1,
+  });
 
-        return () => {
-            clearTimeout(timer2);
-            clearTimeout(timer3);
+  // Send a message over WebSocket
+  const sendMessage = useCallback((type, payload) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type, payload }));
+    }
+  }, []);
+
+  // Update panels with a new hint
+  const handleNewHint = useCallback((hint) => {
+    setPanels((prev) => {
+      const placeholderEntry = Object.entries(prev).find(
+        ([, panel]) => panel.content === 'Loading...'
+      );
+
+      if (placeholderEntry) {
+        const [placeholderKey] = placeholderEntry;
+        return {
+          ...prev,
+          [placeholderKey]: { content: hint, visible: true },
         };
-    }, [currentQuestion]); // Reset panels when question changes
+      } else {
+        const nextPanelKey =
+          Object.entries(prev).find(([_, panel]) => !panel.visible)?.[0] || '1';
+        return {
+          ...prev,
+          [nextPanelKey]: { content: hint, visible: true },
+        };
+      }
+    });
+  }, []);
+  
 
-    // Timer countdown effect
-    useEffect(() => {
-        if (timeLeft > 0) {
-            const timer = setTimeout(() => {
-                setTimeLeft(timeLeft - 1);
-            }, 1000);
+  // Handle answer results from the server
+  const handleAnswerResult = useCallback((isCorrect, rawScore) => {
+    const newScore = rawScore * 10;
+    setScore(newScore);
+    localStorage.setItem('score', newScore);
+    handleNextQuestion();
+  }, []);
 
-            return () => clearTimeout(timer);
-        } else {
-            // Move to next question when timer reaches 0
-            handleNextQuestion();
-        }
-    }, [timeLeft]);
+  // Dispatch server messages based on type
+  const handleServerMessage = useCallback(
+    (message) => {
+      switch (message.type) {
+        case 'hint':
+          if (loadingHints) setLoadingHints(false);
+          handleNewHint(message.hint);
+          break;
+        case 'answer_result':
+          handleAnswerResult(message.correct, message.score);
+          break;
+        case 'game_status':
+          console.log('Game status:', message.status);
+          break;
+        default:
+          break;
+      }
+    },
+    [handleNewHint, handleAnswerResult, loadingHints]
+  );
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        console.log("Submit button clicked, answer:", answer);
-        
-        // For now, just increment score by 10 for each answer
-        const newScore = score + 10;
-        setScore(newScore);
-        localStorage.setItem('score', newScore);
-        
-        // Move to next question or results
-        if (currentQuestion.questionNumber >= 5) {
-            navigate('/results');
-        } else {
-            handleNextQuestion();
-        }
+  // WebSocket connection management
+  useEffect(() => {
+    const wsUrl = `/ws/quiz/${myId}?${maxQuestions}`;
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log('WebSocket connected');
+      sendMessage('start_question', {});
     };
 
-    const handleNextQuestion = () => {
-        // Reset state for next question
-        setTimeLeft(30);
-        setAnswer('');
-        setShowPanel1(false);
-        setShowPanel2(false);
-        setShowPanel3(false);
-        
-        // Update to next sequential question
-        setCurrentQuestion(prev => ({
-            ...prev,
-            questionNumber: prev.questionNumber + 1,
-            question: `Question ${prev.questionNumber + 1}`
-        }));
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        handleServerMessage(message);
+      } catch (error) {
+        console.error('Failed to parse message:', error);
+      }
     };
 
-    return (
-        <div className="relative min-h-screen w-full">
-            <ParticlesBackground />
-            <div className="relative z-10 flex min-h-screen w-full">
-                {/* Left Half */}
-                <div className="w-1/2 p-8 flex flex-col">
-                    {/* Question Section */}
-                    <div className="bg-white rounded-lg p-8 mb-8 shadow-xl">
-                        <h2 className="text-4xl font-bold text-center">{currentQuestion.question}</h2>
-                    </div>
+    ws.onerror = (error) => console.error('WebSocket error:', error);
 
-                    {/* Panels Section */}
-                    <div className="flex flex-col space-y-4">
-                        <div className={`transform transition-all duration-500 ${
-                            showPanel1 ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
-                        }`}>
-                            <div className="bg-yellow-300 rounded-lg p-4 w-full h-24 flex items-center justify-center shadow-lg">
-                                <span className="text-2xl">{Panel1}</span>
-                            </div>
-                        </div>
-                        <div className={`transform transition-all duration-500 ${
-                            showPanel2 ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
-                        }`}>
-                            <div className="bg-yellow-300 rounded-lg p-4 w-full h-24 flex items-center justify-center shadow-lg">
-                                <span className="text-2xl">{Panel2}</span>
-                            </div>
-                        </div>
-                        <div className={`transform transition-all duration-500 ${
-                            showPanel3 ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
-                        }`}>
-                            <div className="bg-yellow-300 rounded-lg p-4 w-full h-24 flex items-center justify-center shadow-lg">
-                                <span className="text-2xl">{Panel3}</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+    return () => {
+      sendMessage('end_game', {});
+      ws.close();
+    };
+  }, []);
 
-                {/* Right Half */}
-                <div className="w-1/2 p-8 flex flex-col">
-                    {/* Timer Section */}
-                    <div className="bg-white rounded-lg p-8 mb-8 shadow-xl">
-                        <div className="text-8xl font-bold text-center text-blue-500">{timeLeft}</div>
-                    </div>
+  // Timer management
+  useEffect(() => {
+    if (loadingHints) return;
 
-                    {/* Answer Section */}
-                    <div className="bg-white rounded-lg p-8 shadow-xl mb-8">
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            <input
-                                type="text"
-                                value={answer}
-                                onChange={(e) => setAnswer(e.target.value)}
-                                placeholder="Type Your Answer here"
-                                className="w-full p-4 text-xl border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                            <button
-                                type="submit"
-                                className="w-full bg-blue-500 text-white py-4 text-xl rounded-md font-bold hover:bg-blue-600 transition"
-                            >
-                                Submit
-                            </button>
-                        </form>
-                    </div>
+    if (timeLeft <= 0) {
+      sendMessage('start_question', {});
+      handleNextQuestion();
+      return;
+    }
+    const timerId = setTimeout(() => setTimeLeft((prev) => prev - 1), 1000);
+    return () => clearTimeout(timerId);
+  }, [timeLeft, loadingHints]);
 
-                    {/* Score Section */}
-                    <div className="bg-white rounded-lg p-6 shadow-xl">
-                        <div className="text-4xl font-bold text-center text-blue-500">Score: {score}</div>
-                    </div>
-                </div>
+  // Move to the next question or navigate to results if done
+  const handleNextQuestion = useCallback(() => {
+    setCurrentQuestion((prev) => {
+      const nextNumber = prev.questionNumber + 1;
+      if (nextNumber > maxQuestions) {
+        navigate('/results');
+        return prev; // Returning prev since we don't need to update state further
+      }
+      return {
+        ...prev,
+        questionNumber: nextNumber,
+        question: `Question ${nextNumber}`,
+      };
+    });
+    setTimeLeft(30);
+    setPanels(DEFAULT_PANELS);
+    setLoadingHints(true);
+  }, [navigate]);
+  
+
+  // Handle answer form submission
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    sendMessage('submit_answer', { answer });
+    setAnswer('');
+  };
+
+
+  return (
+    <div className="relative min-h-screen w-full">
+      <ParticlesBackground />
+      <div className="relative z-10 flex min-h-screen w-full">
+        {/* Left Half: Question and Hints */}
+        <div className="w-1/2 p-8 flex flex-col">
+          <div className="bg-white rounded-lg p-8 mb-8 shadow-xl">
+            <h2 className="text-4xl font-bold text-center">
+              {currentQuestion.question}
+            </h2>
+          </div>
+          <div className="flex flex-col space-y-4">
+            <HintPanels panels={panels} loading={loadingHints}/>
+          </div>
+        </div>
+        {/* Right Half */}
+        <div className="w-1/2 p-8 flex flex-col">
+            {/* Timer Section */}
+            <div className="bg-white rounded-lg p-8 mb-8 shadow-xl">
+                <div className="text-8xl font-bold text-center text-blue-500">{timeLeft}</div>
+            </div>
+
+            {/* Answer Section */}
+            <div className="bg-white rounded-lg p-8 shadow-xl mb-8">
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    <input
+                        type="text"
+                        value={answer}
+                        onChange={(e) => setAnswer(e.target.value)}
+                        placeholder="Type Your Answer here"
+                        className="w-full p-4 text-xl border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={loadingHints}                        
+                    />
+                    <button
+                        type="submit"
+                        className="w-full bg-blue-500 text-white py-4 text-xl rounded-md font-bold hover:bg-blue-600 transition"
+                        disabled={loadingHints}
+                    >
+                        Submit
+                    </button>
+                </form>
+            </div>
+
+            {/* Score Section */}
+            <div className="bg-white rounded-lg p-6 shadow-xl">
+                <div className="text-4xl font-bold text-center text-blue-500">Score: {score}</div>
             </div>
         </div>
+    </div>
+</div>
     );
 };
 
