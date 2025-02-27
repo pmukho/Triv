@@ -41,9 +41,14 @@ class Question(BaseModel):
     answer: str
     created_at: datetime.datetime
     usage_count: int
+    downvotes: int
 
 class GameBatchResp(BaseModel):
     batch: list[Question]
+
+class DownvoteBatchReq(BaseModel):
+    user_id: str
+    batch: list[str]
 
 async def generate_questions():
     print("Notifying QGen", datetime.datetime.now())
@@ -110,7 +115,7 @@ app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost"],
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"]
 )
 
@@ -188,7 +193,8 @@ async def get_db_batch(batch_req: GameBatchReq):
             hint3=q[4],
             answer=q[5],
             created_at=q[6],
-            usage_count=q[7]
+            usage_count=q[7],
+            downvotes=q[8]
         ) for q in questions]
 
         # split questions into return and excess
@@ -234,6 +240,28 @@ async def serve_game_batch(batch_req: GameBatchReq):
 
     db_results = await get_db_batch(fwd_req)
     return GameBatchResp(batch=cached_qs + db_results)
+
+@app.delete("/downvote/")
+async def downvote_questions(downvote_req: DownvoteBatchReq):
+    # update database records
+    print("Downvoting questions: ", downvote_req)
+    placeholders = ",".join(["%s"] * len(downvote_req.batch))
+    query = f"""
+        UPDATE questions
+        SET downvote_count = downvote_count + 1
+        WHERE id IN ({placeholders})"""
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(query, downvote_req.batch)
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print(e)
+        return {"error": "Failed to downvote questions"}
+    return {"status": "success"}
 
 @app.get("/health")
 def health_check():
