@@ -129,7 +129,7 @@ const Quiz = () => {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log('WebSocket connected');
+      console.log('WebSocket connected4');
       sendMessage('start_question', {});
     };
 
@@ -146,6 +146,8 @@ const Quiz = () => {
 
     return () => {
       sendMessage('end_game', {});
+      // const timerId = setTimeout(() => ws.close(), 1000);
+      // clearTimeout(timerId);
       ws.close();
     };
   }, []);
@@ -217,7 +219,9 @@ const Quiz = () => {
 
   // Downvote question
   const handleDownvote = () => {
+    
     sendMessage('downvote_question', {});
+    console.log('Downvoted question');
   };
 
   return (

@@ -239,9 +239,11 @@ async def serve_game_batch(batch_req: GameBatchReq):
         return GameBatchResp(batch=cached_qs)
 
     db_results = await get_db_batch(fwd_req)
+    print("DB RESULTS: ", db_results)
+    print("CACHED QS: ", cached_qs)
     return GameBatchResp(batch=cached_qs + db_results)
 
-@app.delete("/downvote/")
+@app.post("/downvote/")
 async def downvote_questions(downvote_req: DownvoteBatchReq):
     # update database records
     print("Downvoting questions: ", downvote_req)

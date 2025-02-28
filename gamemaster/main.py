@@ -102,18 +102,21 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
                 # Cancel any timer
                 hint_tasks[client_id].cancel()
             elif msg_type == "end_game":
-                gm_id = gmFactory.end_game(client_id)
+                print('GAME ENDED')
+                gm_id = await gmFactory.end_game(client_id)
                 if hint_tasks.get(client_id):
                     hint_tasks[client_id].cancel()
                     hint_tasks.pop(client_id, None)
 
-                await manager.send_message(client_id, {
-                    "type": "game_status",
-                    "status": "Game ended",
-                    "gm_id": gm_id
-                })
+                # await manager.send_message(client_id, {
+                #     "type": "game_status",
+                #     "status": "Game ended",
+                #     "gm_id": gm_id
+                # })
+                print('status sent')
             elif msg_type == "downvote_question":
-                q_id = await gm.downvote_question()
+                q_id = gm.downvote_question()
+                print(f"GM Downvoted question {q_id}")
                 await manager.send_message(client_id, {
                     "type": "game_status",
                     "status": f"Downvoted question {q_id}"
