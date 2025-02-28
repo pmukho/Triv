@@ -1,7 +1,3 @@
-from fastapi import FastAPI, Request
-from pydantic import BaseModel
-import uvicorn
-from fastapi.middleware.cors import CORSMiddleware
 import httpx
 import re
 import difflib
@@ -103,34 +99,15 @@ class GameMaster:
         else:
             return False, self.score, correct_answer, [q["hint1"], q["hint2"], q["hint3"]]
         
-    # async def downvote_question(self):
-    #     # Implement logic to downvote the current question
-    #     index = self.current_question - 1
-    #     if 0 <= index < len(self.questions):
-    #         question = self.questions[index]
-    #         payload = {
-    #             "user_id": str(self.client_id),
-    #             "question_id": question["id"]
-    #             }
-
-    #         # async with httpx.AsyncClient() as client:
-    #         #     try:
-    #         #         response = await client.post(f"{CACHE_SERVICE_URL}/downvote/", json=payload)
-    #         #         response.raise_for_status()
-    #         #         self.questions = response.json()["batch"]
-    #         #     except Exception as e:
-    #         #         print("Error downvoting question:", e)
-            
-    #     return question["id"]
 
     def downvote_question(self):
-        # Implement logic to downvote the current question
         index = self.current_question - 1
         if 0 <= index < len(self.questions):
             question = self.questions[index]
             self.downvoted_questions.append(question["id"])
             
         return question["id"]
+    
     async def notify_downvoted_questions(self):
         payload = {
             "user_id": str(self.client_id),
@@ -146,11 +123,6 @@ class GameMaster:
                 print("Error sending downvoted questions:", e)
         
         print(f"Downvoted questions sent {self.downvoted_questions}")
-    
-    
-    async def send_hints(self, hints):
-        # Implement logic to send hints
-        pass
     
     async def send_data(self, metrics_data):
         # Implement logic to send data

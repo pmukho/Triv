@@ -1,10 +1,7 @@
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
-import uvicorn
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 from gmfactory import GmFactory
-from typing import Optional
 import json
 
 app = FastAPI()
@@ -14,17 +11,6 @@ app.add_middleware(
     allow_methods=["POST"],
     allow_headers=["*"],
 )
-
-class UserInput(BaseModel):
-    userInput: str
-
-class Answer(BaseModel):
-    client_id: int
-    answer: str
-
-
-class ClientId(BaseModel):
-    client_id: int
 
 class ConnectionManager:
     def __init__(self):
@@ -50,9 +36,6 @@ class ConnectionManager:
         for ws in self.active_connections.values():
             await ws.send_json(message)
 
-    
-class MaxQuestions(BaseModel):
-    max_questions: int
     
 gmFactory = GmFactory()
 manager = ConnectionManager()
@@ -103,16 +86,11 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
                 hint_tasks[client_id].cancel()
             elif msg_type == "end_game":
                 print('GAME ENDED')
-                gm_id = await gmFactory.end_game(client_id)
+                await gmFactory.end_game(client_id)
                 if hint_tasks.get(client_id):
                     hint_tasks[client_id].cancel()
                     hint_tasks.pop(client_id, None)
 
-                # await manager.send_message(client_id, {
-                #     "type": "game_status",
-                #     "status": "Game ended",
-                #     "gm_id": gm_id
-                # })
                 print('status sent')
             elif msg_type == "downvote_question":
                 q_id = gm.downvote_question()

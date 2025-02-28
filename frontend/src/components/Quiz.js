@@ -146,8 +146,6 @@ const Quiz = () => {
 
     return () => {
       sendMessage('end_game', {});
-      // const timerId = setTimeout(() => ws.close(), 1000);
-      // clearTimeout(timerId);
       ws.close();
     };
   }, []);

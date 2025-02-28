@@ -1,28 +1,4 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-import asyncio
-import uvicorn
 from gamemaster import GameMaster
-
-class Question(BaseModel):
-    id: str
-    text: str
-
-class Answer(BaseModel):
-    question_id: str
-    ans: str
-
-class DownVote(BaseModel):
-    question_id: str
-    down_vote: bool
-
-class Hint(BaseModel):
-    question_id: str
-    hints: list[str]
-
-class Data(BaseModel):
-    client_id: str
-    Metrics: dict
 
 # GmFacroty class to manage GameMaster instances
 class GmFactory:
