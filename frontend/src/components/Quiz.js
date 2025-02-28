@@ -41,6 +41,12 @@ const Quiz = () => {
     questionNumber: 1,
   });
 
+  // Post Question Logic
+  const [answerRevealed, setAnswerRevealed] = useState(false); // toggles once we get the server's result
+  const [correctAnswer, setCorrectAnswer] = useState('');       // store the correct answer
+  const [postAnswerTimeLeft, setPostAnswerTimeLeft] = useState(0); // 5-second countdown after reveal
+
+
   // Send a message over WebSocket
   const sendMessage = useCallback((type, payload) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -74,11 +80,25 @@ const Quiz = () => {
   
 
   // Handle answer results from the server
-  const handleAnswerResult = useCallback((isCorrect, rawScore) => {
+  const handleAnswerResult = useCallback((isCorrect, rawScore, correctAns, questionHints) => {
     const newScore = rawScore * 10;
     setScore(newScore);
     localStorage.setItem('score', newScore);
-    handleNextQuestion();
+
+    // Reveal hints
+    setPanels(DEFAULT_PANELS);
+    setPanels((prev) => {
+      const newPanels = { ...prev };
+      questionHints.forEach((hint, idx) => {
+        const panelKey = String(idx + 1);
+        newPanels[panelKey] = { content: hint, visible: true };
+      });
+      return newPanels;
+    });
+
+    setAnswerRevealed(true);
+    setCorrectAnswer(correctAns || 'Unknown');
+    setPostAnswerTimeLeft(5);
   }, []);
 
   // Dispatch server messages based on type
@@ -90,7 +110,7 @@ const Quiz = () => {
           handleNewHint(message.hint);
           break;
         case 'answer_result':
-          handleAnswerResult(message.correct, message.score);
+          handleAnswerResult(message.correct, message.score, message.answer, message.hints);
           break;
         case 'game_status':
           console.log('Game status:', message.status);
@@ -109,7 +129,7 @@ const Quiz = () => {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log('WebSocket connected');
+      console.log('WebSocket connected4');
       sendMessage('start_question', {});
     };
 
@@ -126,25 +146,53 @@ const Quiz = () => {
 
     return () => {
       sendMessage('end_game', {});
+      // const timerId = setTimeout(() => ws.close(), 1000);
+      // clearTimeout(timerId);
       ws.close();
     };
   }, []);
 
   // Timer management
   useEffect(() => {
-    if (loadingHints) return;
+    if (postAnswerTimeLeft > 0) return;
 
-    if (timeLeft <= 0) {
-      sendMessage('start_question', {});
+    // If user time is up but not revealed, automatically submit blank
+    if (timeLeft <= 0 && !answerRevealed) {
+      sendMessage('submit_answer', {});
+      return;
+    }
+
+    if (timeLeft > 0 && !answerRevealed) {
+      const timerId = setTimeout(() => setTimeLeft((prev) => prev - 1), 1000);
+      return () => clearTimeout(timerId);
+    }
+  }, [timeLeft, answerRevealed, postAnswerTimeLeft, sendMessage]);
+
+  // Post question timer
+  useEffect(() => {
+    if (!answerRevealed) return; // not in post-answer phase
+
+    if (postAnswerTimeLeft <= 0 && answerRevealed) {
       handleNextQuestion();
       return;
     }
-    const timerId = setTimeout(() => setTimeLeft((prev) => prev - 1), 1000);
-    return () => clearTimeout(timerId);
-  }, [timeLeft, loadingHints]);
+    if (postAnswerTimeLeft > 0) {
+      const timerId = setTimeout(
+        () => setPostAnswerTimeLeft((prev) => prev - 1),
+        1000
+      );
+      return () => clearTimeout(timerId);
+    }
+  }, [postAnswerTimeLeft, answerRevealed]);
 
   // Move to the next question or navigate to results if done
   const handleNextQuestion = useCallback(() => {
+    setAnswer('');
+
+    setAnswerRevealed(false);
+    setCorrectAnswer('');
+    setPostAnswerTimeLeft(0);
+
     setCurrentQuestion((prev) => {
       const nextNumber = prev.questionNumber + 1;
       if (nextNumber > maxQuestions) {
@@ -159,7 +207,7 @@ const Quiz = () => {
     });
     setTimeLeft(30);
     setPanels(DEFAULT_PANELS);
-    setLoadingHints(true);
+    sendMessage('start_question', {});
   }, [navigate]);
   
 
@@ -167,9 +215,14 @@ const Quiz = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
     sendMessage('submit_answer', { answer });
-    setAnswer('');
   };
 
+  // Downvote question
+  const handleDownvote = () => {
+    
+    sendMessage('downvote_question', {});
+    console.log('Downvoted question');
+  };
 
   return (
     <div className="relative min-h-screen w-full">
@@ -189,31 +242,54 @@ const Quiz = () => {
         {/* Right Half */}
         <div className="w-1/2 p-8 flex flex-col">
             {/* Timer Section */}
+            {!answerRevealed && (
             <div className="bg-white rounded-lg p-8 mb-8 shadow-xl">
-                <div className="text-8xl font-bold text-center text-blue-500">{timeLeft}</div>
+              <div className="text-8xl font-bold text-center text-blue-500">
+                {timeLeft}
+              </div>
             </div>
-
+          )}
+          {answerRevealed && (
+            <div className="bg-white rounded-lg p-8 mb-8 shadow-xl space-y-4">
+              <h3 className="text-2xl font-bold text-center">Your Answer:</h3>
+              <div className="text-xl text-center text-black-600">
+                {answer || "No answer provided"}
+              </div>
+              <h3 className="text-2xl font-bold text-center">Correct Answer:</h3>
+              <div className="text-xl text-center text-green-600">
+                {correctAnswer}
+              </div>
+              <button
+                onClick={handleDownvote}
+                className="w-full bg-red-500 text-white py-4 text-xl rounded-md font-bold hover:bg-red-600 transition"
+              >
+                Downvote
+              </button>
+              <div className="text-xl text-center text-gray-600">
+                Moving to next question in {postAnswerTimeLeft}...
+              </div>
+            </div>
+          )}
             {/* Answer Section */}
-            <div className="bg-white rounded-lg p-8 shadow-xl mb-8">
+            {!answerRevealed && (
+              <div className="bg-white rounded-lg p-8 shadow-xl mb-8">
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    <input
-                        type="text"
-                        value={answer}
-                        onChange={(e) => setAnswer(e.target.value)}
-                        placeholder="Type Your Answer here"
-                        className="w-full p-4 text-xl border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        disabled={loadingHints}                        
-                    />
-                    <button
-                        type="submit"
-                        className="w-full bg-blue-500 text-white py-4 text-xl rounded-md font-bold hover:bg-blue-600 transition"
-                        disabled={loadingHints}
-                    >
-                        Submit
-                    </button>
+                  <input
+                    type="text"
+                    value={answer}
+                    onChange={(e) => setAnswer(e.target.value)}
+                    placeholder="Type Your Answer here"
+                    className="w-full p-4 text-xl border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    type="submit"
+                    className="w-full bg-blue-500 text-white py-4 text-xl rounded-md font-bold hover:bg-blue-600 transition"
+                  >
+                    Submit
+                  </button>
                 </form>
-            </div>
-
+              </div>
+            )}
             {/* Score Section */}
             <div className="bg-white rounded-lg p-6 shadow-xl">
                 <div className="text-4xl font-bold text-center text-blue-500">Score: {score}</div>

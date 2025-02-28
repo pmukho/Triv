@@ -19,6 +19,7 @@ class GameMaster:
         self.id = gm_instance_id
         self.questions = []
         self.max_questions = max_questions
+        self.downvoted_questions = []
 
     async def load_questions(self):
         # Load batch from cache
@@ -98,13 +99,54 @@ class GameMaster:
                 result = False
 
             self.current_question += 1
-            return result, self.score
+            return result, self.score, correct_answer, [q["hint1"], q["hint2"], q["hint3"]]
         else:
-            return False, self.score
+            return False, self.score, correct_answer, [q["hint1"], q["hint2"], q["hint3"]]
         
-    async def downvote_question(self):
+    # async def downvote_question(self):
+    #     # Implement logic to downvote the current question
+    #     index = self.current_question - 1
+    #     if 0 <= index < len(self.questions):
+    #         question = self.questions[index]
+    #         payload = {
+    #             "user_id": str(self.client_id),
+    #             "question_id": question["id"]
+    #             }
+
+    #         # async with httpx.AsyncClient() as client:
+    #         #     try:
+    #         #         response = await client.post(f"{CACHE_SERVICE_URL}/downvote/", json=payload)
+    #         #         response.raise_for_status()
+    #         #         self.questions = response.json()["batch"]
+    #         #     except Exception as e:
+    #         #         print("Error downvoting question:", e)
+            
+    #     return question["id"]
+
+    def downvote_question(self):
         # Implement logic to downvote the current question
-        pass
+        index = self.current_question - 1
+        if 0 <= index < len(self.questions):
+            question = self.questions[index]
+            self.downvoted_questions.append(question["id"])
+            
+        return question["id"]
+    async def notify_downvoted_questions(self):
+        payload = {
+            "user_id": str(self.client_id),
+            "batch": self.downvoted_questions
+        }
+
+        async with httpx.AsyncClient() as client:
+            try:
+                print("Sending downvoted questions:", payload)
+                response = await client.post(f"{CACHE_SERVICE_URL}/downvote/", json=payload)
+                response.raise_for_status()
+            except Exception as e:
+                print("Error sending downvoted questions:", e)
+        
+        print(f"Downvoted questions sent {self.downvoted_questions}")
+    
     
     async def send_hints(self, hints):
         # Implement logic to send hints

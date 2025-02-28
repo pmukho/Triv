@@ -38,8 +38,9 @@ class GmFactory:
             self.game_master_number += 1
         return client_id
     
-    def end_game(self, client_id):
+    async def end_game(self, client_id):
         gm = self.game_masters.get(client_id)
+        await gm.notify_downvoted_questions()
         gm_id = gm.id
         del self.game_masters[client_id]
 

@@ -47,7 +47,7 @@ class ConnectionManager:
             await ws.send_json(message)
             
     async def broadcast(self, message: dict):
-        for ws in self.active_wss.values():
+        for ws in self.active_connections.values():
             await ws.send_json(message)
 
     
@@ -91,26 +91,35 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
                 })
             elif msg_type == "submit_answer":
                 user_answer = payload.get("answer", "")
-                is_correct, score = await gm.check_answer(user_answer)
+                is_correct, score, answer, hints = await gm.check_answer(user_answer)
                 await manager.send_message(client_id, {
                     "type": "answer_result",
                     "correct": is_correct,
-                    "score": score
+                    "score": score,
+                    "answer": answer,
+                    "hints": hints
                 })
                 # Cancel any timer
                 hint_tasks[client_id].cancel()
-                task = asyncio.create_task(send_hints_timed(gm, client_id))
-                hint_tasks[client_id] = task
             elif msg_type == "end_game":
-                gm_id = gmFactory.end_game(client_id)
+                print('GAME ENDED')
+                gm_id = await gmFactory.end_game(client_id)
                 if hint_tasks.get(client_id):
                     hint_tasks[client_id].cancel()
                     hint_tasks.pop(client_id, None)
 
+                # await manager.send_message(client_id, {
+                #     "type": "game_status",
+                #     "status": "Game ended",
+                #     "gm_id": gm_id
+                # })
+                print('status sent')
+            elif msg_type == "downvote_question":
+                q_id = gm.downvote_question()
+                print(f"GM Downvoted question {q_id}")
                 await manager.send_message(client_id, {
                     "type": "game_status",
-                    "status": "Game ended",
-                    "gm_id": gm_id
+                    "status": f"Downvoted question {q_id}"
                 })
 
     # Handle disconnect and other errors
