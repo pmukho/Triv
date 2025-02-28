@@ -5,11 +5,25 @@ from fastapi.middleware.cors import CORSMiddleware
 import httpx
 import re
 import difflib
+import psycopg2
+import os
 
 CACHE_SERVICE_URL = "http://cache:8000"
 MIN_ANSWER_SIMILARITY = 0.8
 MIN_TOKEN_SIMILARITY = 0.5
 DEFAULT_MAX_QUESTIONS = 5
+DB_CONFIG = {
+    "dbname": os.environ.get("POSTGRES_DB"),
+    "user": os.environ.get("POSTGRES_USER"),
+    "password": os.environ.get("POSTGRES_PASSWORD"),
+    "host": "postgres-db",
+    "port": "5432"
+}
+
+def get_db_connection():
+    conn = psycopg2.connect(**DB_CONFIG)
+    return conn
+
 
 class GameMaster:
     def __init__(self, client_id, gm_instance_id, max_questions=DEFAULT_MAX_QUESTIONS):
@@ -110,6 +124,21 @@ class GameMaster:
         # Implement logic to send hints
         pass
     
-    async def send_data(self, metrics_data):
-        # Implement logic to send data
-        pass
+    async def send_results(self):
+        # Writing Results to DB
+        print("Writing results to db")
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        for question in self.questions:
+            cursor.execute("""
+                INSERT INTO questions_in_game (game_id, question_id)
+                VALUES (%s, %s)
+            """, (self.id, question["id"]))
+        cursor.execute("""
+            INSERT INTO game_results (user_id, game_id, score)
+            VALUES (%s ,%s, %d)
+        """, (self.client_id, self.id, self.score))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        print("Finished writing questions to db")

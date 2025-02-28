@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ParticlesBackground from './ParticlesBackground';
 
-const UserInputTest = () => {
+const GameHistory = () => {
     const [userInput, setUserInput] = useState("");
     const [response, setResponse] = useState("");
     const navigate = useNavigate();
@@ -73,4 +73,4 @@ const UserInputTest = () => {
     );
 };
 
-export default UserInputTest;
+export default GameHistory;

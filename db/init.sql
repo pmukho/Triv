@@ -58,3 +58,17 @@ INSERT INTO user_question_store (user_id, question_id) VALUES
 ('3', '8'),
 ('3', '9'),
 ('3', '10');
+
+
+CREATE TABLE IF NOT EXISTS user_game_analytics (
+    user_id VARCHAR(255) REFERENCES users(id),
+    game_id VARCHAR(255) NOT NULL,
+    score INT DEFAULT 0,
+    PRIMARY KEY (user_id, game_id)
+);
+
+CREATE TABLE IF NOT EXISTS questions_in_game (
+    game_id VARCHAR(255)  NOT NULL,
+    question_id VARCHAR(255) REFERENCES questions(id),
+    PRIMARY KEY (game_id)
+);

@@ -40,6 +40,7 @@ class GmFactory:
     
     def end_game(self, client_id):
         gm = self.game_masters.get(client_id)
+        gm.send_results()
         gm_id = gm.id
         del self.game_masters[client_id]
 

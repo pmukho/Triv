@@ -4,7 +4,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Login from "./components/Login";
 import Leaderboard from "./components/Leaderboard";
 import Quiz from "./components/Quiz";
-import UserInputTest from "./components/UserInputTest";
+import GameHistory from "./components/GameHistory";
 import Results from "./components/Results";
 
 import "./index.css";
@@ -19,7 +19,7 @@ root.render(
                 <Route path="/quiz" element={<Quiz />} />
                 <Route path="/results" element={<Results />} />
                 <Route path="/leaderboard" element={<Leaderboard />} />
-                <Route path="/userinputtest" element={<UserInputTest/>} />
+                <Route path="/gamehistory" element={<GameHistory/>} />
             </Routes>
         </Router>
     </React.StrictMode>
