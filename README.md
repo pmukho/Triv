@@ -24,7 +24,7 @@ This is the relevant directory organization (omitting ignore files etc.).
 |-.env
 ```
 Each folder holds the source/dependency files, Dockerfile, test files, and other miscellaneous files depending on the service.
-**NOTE:** .env file is not part of the repo but should define the following variables at least:
+**NOTE:** Define the following environment variables. Users can rename the .env.example file and fill in:
 ```
 POSTGRES_USER=...
 POSTGRES_PASSWORD=...

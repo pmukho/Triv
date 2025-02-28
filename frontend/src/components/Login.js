@@ -14,7 +14,7 @@ const Login = () => {
         // Store user info in localStorage or state management
         localStorage.setItem('userName', name);
         localStorage.setItem('userEmail', email);
-        navigate("/quiz"); // Navigate to quiz instead of leaderboard
+        navigate("/quiz", { state: { maxQuestions : 5 }}); // Navigate to quiz instead of leaderboard
     };
 
     return (
