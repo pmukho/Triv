@@ -58,3 +58,13 @@ INSERT INTO user_question_store (user_id, question_id) VALUES
 ('3', '8'),
 ('3', '9'),
 ('3', '10');
+
+CREATE TABLE IF NOT EXISTS wiki_articles (
+    title TEXT NOT NULL,
+    category TEXT NOT NULL,
+    PRIMARY KEY (title, category)
+);
+
+COPY wiki_articles(title, category) 
+FROM '/docker-entrypoint-initdb.d/data/wiki_articles.csv' 
+DELIMITER ',' CSV HEADER;
