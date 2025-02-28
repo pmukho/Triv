@@ -52,7 +52,8 @@ def fetch_petscan_data(psid: str):
                         for article in a_data['*']:
                             if isinstance(article, dict) and 'title' in article:
                                 articles.append({
-                                    'title': article['title'].replace('_', ' '),
+                                    # 'title': article['title'].replace('_', ' '),
+                                    'title': article['title'],
                                     'category': psid_to_category.get(psid, 'Unknown')
                                 })
             

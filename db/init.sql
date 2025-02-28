@@ -60,8 +60,9 @@ INSERT INTO user_question_store (user_id, question_id) VALUES
 ('3', '10');
 
 CREATE TABLE IF NOT EXISTS wiki_articles (
-    title TEXT PRIMARY KEY,
-    category TEXT NOT NULL
+    title TEXT NOT NULL,
+    category TEXT NOT NULL,
+    PRIMARY KEY (title, category)
 );
 
 COPY wiki_articles(title, category) 
