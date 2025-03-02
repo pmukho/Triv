@@ -220,7 +220,8 @@ async def get_db_batch(batch_req: GameBatchReq):
         return return_qs
     except Exception as e:
         print(e)
-        return {"error": "Failed to fetch questions"}
+        print({"error": "Failed to fetch questions"})
+        return []
     finally:
         try:
             cursor.close()

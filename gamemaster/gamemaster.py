@@ -97,7 +97,7 @@ class GameMaster:
             self.current_question += 1
             return result, self.score, correct_answer, [q["hint1"], q["hint2"], q["hint3"]]
         else:
-            return False, self.score, correct_answer, [q["hint1"], q["hint2"], q["hint3"]]
+            return False, self.score, "", []
         
 
     def downvote_question(self):

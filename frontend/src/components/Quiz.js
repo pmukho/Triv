@@ -152,7 +152,7 @@ const Quiz = () => {
 
   // Timer management
   useEffect(() => {
-    if (postAnswerTimeLeft > 0) return;
+    if (loadingHints || postAnswerTimeLeft > 0) return;
 
     // If user time is up but not revealed, automatically submit blank
     if (timeLeft <= 0 && !answerRevealed) {
@@ -164,7 +164,7 @@ const Quiz = () => {
       const timerId = setTimeout(() => setTimeLeft((prev) => prev - 1), 1000);
       return () => clearTimeout(timerId);
     }
-  }, [timeLeft, answerRevealed, postAnswerTimeLeft, sendMessage]);
+  }, [timeLeft, answerRevealed, postAnswerTimeLeft, loadingHints, sendMessage]);
 
   // Post question timer
   useEffect(() => {
@@ -190,6 +190,7 @@ const Quiz = () => {
     setAnswerRevealed(false);
     setCorrectAnswer('');
     setPostAnswerTimeLeft(0);
+    setLoadingHints(true);
 
     setCurrentQuestion((prev) => {
       const nextNumber = prev.questionNumber + 1;
@@ -278,10 +279,12 @@ const Quiz = () => {
                     onChange={(e) => setAnswer(e.target.value)}
                     placeholder="Type Your Answer here"
                     className="w-full p-4 text-xl border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={loadingHints}
                   />
                   <button
                     type="submit"
                     className="w-full bg-blue-500 text-white py-4 text-xl rounded-md font-bold hover:bg-blue-600 transition"
+                    disabled={loadingHints}
                   >
                     Submit
                   </button>
