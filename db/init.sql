@@ -60,15 +60,15 @@ INSERT INTO user_question_store (user_id, question_id) VALUES
 ('3', '10');
 
 
-CREATE TABLE IF NOT EXISTS user_game_analytics (
-    user_id VARCHAR(255) REFERENCES users(id),
+CREATE TABLE IF NOT EXISTS game_results (
     game_id VARCHAR(255) NOT NULL,
+    user_id VARCHAR(255), --Right now, we are not enforcing foreign key constraint becuase we don't have user table being filled becuase there is no auth. This will change
     score INT DEFAULT 0,
-    PRIMARY KEY (user_id, game_id)
+    PRIMARY KEY (game_id)
 );
 
 CREATE TABLE IF NOT EXISTS questions_in_game (
-    game_id VARCHAR(255)  NOT NULL,
     question_id VARCHAR(255) REFERENCES questions(id),
-    PRIMARY KEY (game_id)
+    game_id VARCHAR(255) REFERENCES game_results(game_id),
+    PRIMARY KEY (question_id)
 );

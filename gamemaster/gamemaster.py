@@ -126,19 +126,27 @@ class GameMaster:
     
     async def send_results(self):
         # Writing Results to DB
-        print("Writing results to db")
         conn = get_db_connection()
         cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO game_results (user_id, game_id, score)
+            VALUES (%s ,%s, %s)
+        """, (self.client_id, self.id, self.score))
         for question in self.questions:
             cursor.execute("""
                 INSERT INTO questions_in_game (game_id, question_id)
                 VALUES (%s, %s)
             """, (self.id, question["id"]))
-        cursor.execute("""
-            INSERT INTO game_results (user_id, game_id, score)
-            VALUES (%s ,%s, %d)
-        """, (self.client_id, self.id, self.score))
         conn.commit()
+
+        # Test if the data was written
+        cursor.execute("SELECT * FROM questions_in_game WHERE game_id = '%s'", (self.id,))
+        questions = cursor.fetchall()
+        print("Inserted questions:", questions, flush=True)
+
+        cursor.execute("SELECT * FROM game_results WHERE game_id = '%s'", (self.id,))
+        results = cursor.fetchall()
+        print("Inserted game results:", results, flush=True)
+
         cursor.close()
         conn.close()
-        print("Finished writing questions to db")

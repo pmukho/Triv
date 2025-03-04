@@ -102,7 +102,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
                 task = asyncio.create_task(send_hints_timed(gm, client_id))
                 hint_tasks[client_id] = task
             elif msg_type == "end_game":
-                gm_id = gmFactory.end_game(client_id)
+                print(f"Ending game for client {client_id}")
+                gm_id = await gmFactory.end_game(client_id)
                 if hint_tasks.get(client_id):
                     hint_tasks[client_id].cancel()
                     hint_tasks.pop(client_id, None)
