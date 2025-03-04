@@ -6,7 +6,8 @@ CREATE TABLE IF NOT EXISTS questions (
     hint3 TEXT NOT NULL,
     answer TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    usage_count INT DEFAULT 0
+    usage_count INT DEFAULT 0,
+    downvote_count INT DEFAULT 0
 );
 
 INSERT INTO questions (id, category, hint1, hint2, hint3, answer) VALUES
