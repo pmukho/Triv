@@ -1,13 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-import asyncio
 import redis.asyncio as redis
-from pydantic import BaseModel
 import psycopg2
 import os
-import datetime
 import httpx
+from models import _GameBatchReqElem, GameBatchReq, Question, GameBatchResp, DownvoteBatchReq
 
 DB_CONFIG = {
     "dbname": os.environ.get("POSTGRES_DB"),
@@ -22,33 +20,6 @@ def get_db_connection():
     return conn
 
 redis_client = None
-
-class _GameBatchReqElem(BaseModel):
-    category: str
-    count: int
-
-class GameBatchReq(BaseModel):
-    user_id: str
-    batch_size: int
-    batch: list[_GameBatchReqElem]
-
-class Question(BaseModel):
-    id: str
-    category: str
-    hint1: str
-    hint2: str
-    hint3: str
-    answer: str
-    created_at: datetime.datetime
-    usage_count: int
-    downvotes: int
-
-class GameBatchResp(BaseModel):
-    batch: list[Question]
-
-class DownvoteBatchReq(BaseModel):
-    user_id: str
-    batch: list[str]
 
 async def generate_questions():
     print("Notifying QGen", datetime.datetime.now())
@@ -101,7 +72,7 @@ async def generate_questions():
 async def lifespan(app):
     print("Starting up")
 
-    await generate_questions()
+    # await generate_questions()
 
     global redis_client
     redis_client = await redis.from_url("redis://redis:6379/0")
