@@ -2,77 +2,41 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import redis.asyncio as redis
-import psycopg2
+from psycopg2 import pool
 import os
-import httpx
 from models import _GameBatchReqElem, GameBatchReq, Question, GameBatchResp, DownvoteBatchReq
+from contextlib import contextmanager
 
-DB_CONFIG = {
-    "dbname": os.environ.get("POSTGRES_DB"),
-    "user": os.environ.get("POSTGRES_USER"),
-    "password": os.environ.get("POSTGRES_PASSWORD"),
-    "host": "postgres-db",
-    "port": "5432"
-}
+# Database connection related settings
+db_name = os.environ.get("POSTGRES_DB")
+db_user = os.environ.get("POSTGRES_USER")
+db_password = os.environ.get("POSTGRES_PASSWORD")
+db_host = "postgres-db"
+db_port = "5432"
+MAX_DB_CONNECTIONS = 5
+MIN_DB_CONNECTIONS = 1
 
+db_conn_pool = pool.SimpleConnectionPool(
+    minconn=MIN_DB_CONNECTIONS,
+    maxconn=MAX_DB_CONNECTIONS,
+    user=db_user,
+    password=db_password,
+    host=db_host,
+    port=db_port
+)
+@contextmanager
 def get_db_connection():
-    conn = psycopg2.connect(**DB_CONFIG)
-    return conn
+    conn = db_conn_pool.getconn()
+    try:
+        yield conn
+    finally:
+        conn.close()
+        db_conn_pool.putconn(conn)
 
-redis_client = None
-
-async def generate_questions():
-    print("Notifying QGen", datetime.datetime.now())
-    
-    articles_map = {
-        "Usain_Bolt": "PEOPLE",
-        "Babe_Ruth": "PEOPLE",
-        "Christopher_Columbus": "PEOPLE",
-        "Albert_Einstein": "PEOPLE",
-        "Moment_of_inertia": "SCIENCE",
-        "Surface_tension": "SCIENCE",
-        "Water": "SCIENCE",
-        "Rainbow": "SCIENCE"
-    }
-    
-    articles = list(articles_map.keys())
-    payload = {
-        "article_names": articles
-    }
-
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post("http://question-gen:8000/questions", json=payload, timeout=120.0)
-            response.raise_for_status()
-            print("Successfully notified QGen")
-            print("Response: ", response.json())
-
-            # write questions to db
-            questions = response.json()["questions"]
-            print("Writing questions to db")
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            for i in range(len(questions)):
-                q=questions[i]
-                id = str(100+i)
-                category = articles_map[articles[i]]
-                
-                cursor.execute("""
-                    INSERT INTO questions (id, category, hint1, hint2, hint3, answer)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                """, (id, category, q["prompt1"], q["prompt2"], q["prompt3"], q["answer"]))
-            conn.commit()
-            cursor.close()
-            conn.close()
-            print("Finished writing questions to db")
-        except Exception as e:
-            print(f"Error notifying QGen: {e}")
 
 @asynccontextmanager
 async def lifespan(app):
     print("Starting up")
-
-    # await generate_questions()
 
     global redis_client
     redis_client = await redis.from_url("redis://redis:6379/0")
@@ -150,8 +114,7 @@ async def get_db_batch(batch_req: GameBatchReq):
     print("Query: ", query)
     
     questions = []
-    try:
-        conn = get_db_connection()
+    with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(query, params)
         questions = cursor.fetchall()
@@ -178,7 +141,6 @@ async def get_db_batch(batch_req: GameBatchReq):
                 return_qs.append(q)
             else:
                 excess_qs.append(q)
-
         # cache excess questions
         print("Caching excess questions: ", excess_qs)
         async with redis_client.pipeline(transaction=True) as pipe:
@@ -186,19 +148,58 @@ async def get_db_batch(batch_req: GameBatchReq):
                 cache_key = f"unseen:{user_id}:{q.category}"
                 pipe.rpush(cache_key, q.json())
             await pipe.execute()
-
         # return the questions
         return return_qs
-    except Exception as e:
-        print(e)
-        print({"error": "Failed to fetch questions"})
-        return []
-    finally:
-        try:
-            cursor.close()
-            conn.close()
-        except NameError:
-            pass
+
+    # try:
+    #     conn = get_db_connection()
+    #     cursor = conn.cursor()
+    #     cursor.execute(query, params)
+    #     questions = cursor.fetchall()
+    #     print("Fetched questions: ", questions)
+    #     questions = [Question(
+    #         id=q[0],
+    #         category=q[1],
+    #         hint1=q[2],
+    #         hint2=q[3],
+    #         hint3=q[4],
+    #         answer=q[5],
+    #         created_at=q[6],
+    #         usage_count=q[7],
+    #         downvotes=q[8]
+    #     ) for q in questions]
+
+    #     # split questions into return and excess
+    #     return_qs = []
+    #     excess_qs = []
+    #     counts = {elem.category: elem.count for elem in batch_req.batch}
+    #     for q in questions:
+    #         if counts[q.category] > 0:
+    #             counts[q.category] -= 1
+    #             return_qs.append(q)
+    #         else:
+    #             excess_qs.append(q)
+
+    #     # cache excess questions
+    #     print("Caching excess questions: ", excess_qs)
+    #     async with redis_client.pipeline(transaction=True) as pipe:
+    #         for q in excess_qs:
+    #             cache_key = f"unseen:{user_id}:{q.category}"
+    #             pipe.rpush(cache_key, q.json())
+    #         await pipe.execute()
+
+    #     # return the questions
+    #     return return_qs
+    # except Exception as e:
+    #     print(e)
+    #     print({"error": "Failed to fetch questions"})
+    #     return []
+    # finally:
+    #     try:
+    #         cursor.close()
+    #         conn.close()
+    #     except NameError:
+    #         pass
 
 @app.post("/getbatch/")
 async def serve_game_batch(batch_req: GameBatchReq):
