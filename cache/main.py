@@ -1,11 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 import redis.asyncio as redis
 from psycopg2 import pool
 import os
 from models import _GameBatchReqElem, GameBatchReq, Question, GameBatchResp, DownvoteBatchReq
-from contextlib import contextmanager
 
 # Database connection related settings
 db_name = os.environ.get("POSTGRES_DB")
@@ -30,21 +29,28 @@ def get_db_connection():
     try:
         yield conn
     finally:
-        conn.close()
         db_conn_pool.putconn(conn)
 
+# Redis connection related settings
+MAX_REDIS_CONNECTIONS = 10
+redis_client = None
 
 @asynccontextmanager
 async def lifespan(app):
     print("Starting up")
 
+    # Initialize Redis client (no need to manage connection pool)
     global redis_client
-    redis_client = await redis.from_url("redis://redis:6379/0")
+    redis_client = await redis.from_url(
+        "redis://redis:6379",
+        decode_responses=True,
+        max_connections=MAX_REDIS_CONNECTIONS)
 
     yield
-    print("Shutting down")
 
-    await redis.aclose()
+    print("Shutting down")
+    db_conn_pool.closeall()
+    await redis_client.aclose()
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(
@@ -148,58 +154,8 @@ async def get_db_batch(batch_req: GameBatchReq):
                 cache_key = f"unseen:{user_id}:{q.category}"
                 pipe.rpush(cache_key, q.json())
             await pipe.execute()
-        # return the questions
+
         return return_qs
-
-    # try:
-    #     conn = get_db_connection()
-    #     cursor = conn.cursor()
-    #     cursor.execute(query, params)
-    #     questions = cursor.fetchall()
-    #     print("Fetched questions: ", questions)
-    #     questions = [Question(
-    #         id=q[0],
-    #         category=q[1],
-    #         hint1=q[2],
-    #         hint2=q[3],
-    #         hint3=q[4],
-    #         answer=q[5],
-    #         created_at=q[6],
-    #         usage_count=q[7],
-    #         downvotes=q[8]
-    #     ) for q in questions]
-
-    #     # split questions into return and excess
-    #     return_qs = []
-    #     excess_qs = []
-    #     counts = {elem.category: elem.count for elem in batch_req.batch}
-    #     for q in questions:
-    #         if counts[q.category] > 0:
-    #             counts[q.category] -= 1
-    #             return_qs.append(q)
-    #         else:
-    #             excess_qs.append(q)
-
-    #     # cache excess questions
-    #     print("Caching excess questions: ", excess_qs)
-    #     async with redis_client.pipeline(transaction=True) as pipe:
-    #         for q in excess_qs:
-    #             cache_key = f"unseen:{user_id}:{q.category}"
-    #             pipe.rpush(cache_key, q.json())
-    #         await pipe.execute()
-
-    #     # return the questions
-    #     return return_qs
-    # except Exception as e:
-    #     print(e)
-    #     print({"error": "Failed to fetch questions"})
-    #     return []
-    # finally:
-    #     try:
-    #         cursor.close()
-    #         conn.close()
-    #     except NameError:
-    #         pass
 
 @app.post("/getbatch/")
 async def serve_game_batch(batch_req: GameBatchReq):
@@ -226,16 +182,11 @@ async def downvote_questions(downvote_req: DownvoteBatchReq):
         SET downvote_count = downvote_count + 1
         WHERE id IN ({placeholders})"""
     
-    try:
-        conn = get_db_connection()
+    with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(query, downvote_req.batch)
         conn.commit()
         cursor.close()
-        conn.close()
-    except Exception as e:
-        print(e)
-        return {"error": "Failed to downvote questions"}
     return {"status": "success"}
 
 @app.get("/health")
