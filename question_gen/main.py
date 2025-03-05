@@ -8,8 +8,11 @@ from pydantic import BaseModel
 # wiki_wiki = None
 # llm = None
 
-wiki_wiki = wikipediaapi.Wikipedia(user_agent= 'SWEats (njwei@g.ucla.edu)', language='en')
-llm = OpenAI()
+# wiki_wiki = wikipediaapi.Wikipedia(user_agent= 'SWEats (njwei@g.ucla.edu)', language='en')
+# llm = OpenAI()
+
+wiki_wiki = None
+llm = None
 
 class Articles(BaseModel):
     article_names: list[str]
@@ -57,8 +60,10 @@ def read_questions(articles: Articles):
         page = wiki_wiki.page(article_name)
         if not page.exists():
             raise Exception(f"Article {article_name} does not exist.")
-        prompt = "Create a NAQT style triva prompt using 3 clues in decreasing obscurity given the following abstract:\n" + page.summary
-        prompt += "\n The first clue should be prefaced with '1.', the second with '2.', and the third with '3.'. The answer should be prefaced with 'ANSWER:'."
+        
+
+        prompt = "Create a NAQT style triva prompt using 3 clues which contain one fact each in decreasing obscurity given the following abstract:\n" + page.summary
+        prompt += "\n Each clue should be less than 15 words long. The first clue should be prefaced with '1.', the second with '2.', and the third with '3.'. The answer should be prefaced with 'ANSWER:'."
         
         # NOTE: The following line actually makes the question generation significantly worse if used instead of the above line.
         # This is likely because the weird symbol makes the prompt out of distribution.
@@ -66,7 +71,8 @@ def read_questions(articles: Articles):
         # prompt += "\n The first clue should be prefaced with '*|*', the second with '*|*', and the third with *|*.'. The answer should be prefaced with '*|*'."
 
         completion = llm.chat.completions.create(
-            model="gpt-4o",
+            # model="gpt-4o",
+            model="gpt-4.5-preview",
             messages=[
                 {"role": "developer", "content": "You are a helpful assistant."},
                 {
@@ -79,9 +85,9 @@ def read_questions(articles: Articles):
         print(completion.choices[0].message.content)
         content = completion.choices[0].message.content
 
-        prompt1 = content.split("1.")[1].split("2.")[0].strip()
-        prompt2 = content.split("2.")[1].split("3.")[0].strip()
-        prompt3 = content.split("3.")[1].split("ANSWER:")[0].strip()
+        prompt1 = content.split("1.")[1].split("\n2.")[0].strip()
+        prompt2 = content.split("\n2.")[1].split("\n3.")[0].strip()
+        prompt3 = content.split("\n3.")[1].split("ANSWER:")[0].strip()
         answer = content.split("ANSWER:")[1].strip()
 
         question = Question(prompt1=prompt1, prompt2=prompt2, prompt3=prompt3, answer=answer)
