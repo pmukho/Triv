@@ -165,15 +165,12 @@ async def get_db_batch(batch_req: GameBatchReq, fetch_count: int = 10):
         queries.append(query)
         params.extend([user_id, elem.category, max(fetch_count, elem.count)])       
     query = " UNION ALL ".join(queries)
-    print("Query: ", query)
     
     questions = []
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(query, params)
         questions = cursor.fetchall()
-        conn.commit()
-        cursor.close()
 
         print("Fetched questions: ", questions)
         questions = [Question(
@@ -187,6 +184,17 @@ async def get_db_batch(batch_req: GameBatchReq, fetch_count: int = 10):
             usage_count=q[7],
             downvotes=q[8]
         ) for q in questions]
+
+        # update user_quesiton_store
+        placeholders = ",".join(["(%s, %s)"] * len(questions))
+        query = f"""
+            INSERT INTO user_question_store (user_id, question_id) VALUES 
+            {placeholders}
+        """
+        params = [ item for q in questions for item in (user_id, q.id) ]
+        cursor.execute(query, params)
+        conn.commit()
+        cursor.close()
 
         # split questions into return and excess
         return_qs = []
