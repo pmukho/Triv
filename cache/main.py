@@ -5,6 +5,8 @@ import redis.asyncio as redis
 from psycopg2 import pool
 import os
 from models import _GameBatchReqElem, GameBatchReq, Question, GameBatchResp, DownvoteBatchReq
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 
 # Database connection related settings
 db_name = os.environ.get("POSTGRES_DB")
@@ -15,7 +17,7 @@ db_port = "5432"
 MAX_DB_CONNECTIONS = 5
 MIN_DB_CONNECTIONS = 1
 
-db_conn_pool = pool.SimpleConnectionPool(
+db_conn_pool = pool.ThreadedConnectionPool(
     minconn=MIN_DB_CONNECTIONS,
     maxconn=MAX_DB_CONNECTIONS,
     user=db_user,
@@ -33,24 +35,63 @@ def get_db_connection():
 
 # Redis connection related settings
 MAX_REDIS_CONNECTIONS = 10
+redis_host = "redis"
+redis_port = 6379
 redis_client = None
 
+# Background tasks
+def background_task():
+    print("Running background task")
+
+# FastAPI app
 @asynccontextmanager
 async def lifespan(app):
     print("Starting up")
 
     # Initialize Redis client (no need to manage connection pool)
     global redis_client
-    redis_client = await redis.from_url(
-        "redis://redis:6379",
-        decode_responses=True,
-        max_connections=MAX_REDIS_CONNECTIONS)
+    redis_pool = redis.connection.BlockingConnectionPool(
+        max_connections=MAX_REDIS_CONNECTIONS,
+        host=redis_host,
+        port=redis_port,
+        decode_responses=True
+    )
+    redis_client = redis.Redis(connection_pool=redis_pool)
+    # Test Redis connection
+    try:
+        await redis_client.ping()
+        print("Connected to Redis")
+    except redis.ConnectionError:
+        print("Failed to connect to Redis")
+        raise
+
+    # Test database connection
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1")
+            print("Connected to PostgreSQL")
+            cursor.close()
+    except Exception as e:
+        print("Failed to connect to PostgreSQL", e)
+        raise
+    
+    # Start background scheduler
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(
+        background_task,
+        trigger=IntervalTrigger(minutes=1),
+        id="background_task",
+        replace_existing=True
+    )
+    scheduler.start()
 
     yield
 
     print("Shutting down")
     db_conn_pool.closeall()
     await redis_client.aclose()
+    scheduler.shutdown(wait=False)
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(
@@ -81,7 +122,7 @@ async def get_redis_batch(batch_req: GameBatchReq):
     return_qs = []
     for i in range(0, len(cached_results), 2):
         for q in cached_results[i]:
-            q = q.decode()
+            print(q)
             q = Question.parse_raw(q)
             return_qs.append(q)
 
@@ -98,7 +139,7 @@ async def get_redis_batch(batch_req: GameBatchReq):
 
     return return_qs, fwd_batch_req
 
-async def get_db_batch(batch_req: GameBatchReq):
+async def get_db_batch(batch_req: GameBatchReq, fetch_count: int = 10):
     print("CHECKING DB")
     user_id = batch_req.user_id
     queries = []
@@ -115,7 +156,7 @@ async def get_db_batch(batch_req: GameBatchReq):
             LIMIT %s)
         """
         queries.append(query)
-        params.extend([user_id, elem.category, elem.count])       
+        params.extend([user_id, elem.category, fetch_count])       
     query = " UNION ALL ".join(queries)
     print("Query: ", query)
     
