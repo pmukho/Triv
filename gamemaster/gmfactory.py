@@ -1,28 +1,4 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-import asyncio
-import uvicorn
 from gamemaster import GameMaster
-
-class Question(BaseModel):
-    id: str
-    text: str
-
-class Answer(BaseModel):
-    question_id: str
-    ans: str
-
-class DownVote(BaseModel):
-    question_id: str
-    down_vote: bool
-
-class Hint(BaseModel):
-    question_id: str
-    hints: list[str]
-
-class Data(BaseModel):
-    client_id: str
-    Metrics: dict
 
 # GmFacroty class to manage GameMaster instances
 class GmFactory:
@@ -39,7 +15,8 @@ class GmFactory:
         return client_id
     
     async def end_game(self, client_id):
-        gm = self.game_masters[client_id]
+        gm = self.game_masters.get(client_id)
+        await gm.notify_downvoted_questions()
         gm_id = gm.id
         print(f"Game Master for game number {gm_id} with client_id: {client_id} called to be ended", flush=True)
         await gm.send_results()

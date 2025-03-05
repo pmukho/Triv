@@ -6,7 +6,8 @@ CREATE TABLE IF NOT EXISTS questions (
     hint3 TEXT NOT NULL,
     answer TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    usage_count INT DEFAULT 0
+    usage_count INT DEFAULT 0,
+    downvote_count INT DEFAULT 0
 );
 
 INSERT INTO questions (id, category, hint1, hint2, hint3, answer) VALUES
@@ -59,6 +60,15 @@ INSERT INTO user_question_store (user_id, question_id) VALUES
 ('3', '9'),
 ('3', '10');
 
+CREATE TABLE IF NOT EXISTS wiki_articles (
+    title TEXT NOT NULL,
+    category TEXT NOT NULL,
+    PRIMARY KEY (title, category)
+);
+
+COPY wiki_articles(title, category) 
+FROM '/docker-entrypoint-initdb.d/data/wiki_articles.csv' 
+DELIMITER ',' CSV HEADER;
 
 CREATE TABLE IF NOT EXISTS game_results (
     game_id VARCHAR(255) NOT NULL,

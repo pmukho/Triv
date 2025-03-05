@@ -1,10 +1,7 @@
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
-import uvicorn
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 from gmfactory import GmFactory
-from typing import Optional
 import json
 
 app = FastAPI()
@@ -14,17 +11,6 @@ app.add_middleware(
     allow_methods=["POST"],
     allow_headers=["*"],
 )
-
-class UserInput(BaseModel):
-    userInput: str
-
-class Answer(BaseModel):
-    client_id: int
-    answer: str
-
-
-class ClientId(BaseModel):
-    client_id: int
 
 class ConnectionManager:
     def __init__(self):
@@ -47,12 +33,9 @@ class ConnectionManager:
             await ws.send_json(message)
             
     async def broadcast(self, message: dict):
-        for ws in self.active_wss.values():
+        for ws in self.active_connections.values():
             await ws.send_json(message)
 
-    
-class MaxQuestions(BaseModel):
-    max_questions: int
     
 gmFactory = GmFactory()
 manager = ConnectionManager()
@@ -91,27 +74,30 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
                 })
             elif msg_type == "submit_answer":
                 user_answer = payload.get("answer", "")
-                is_correct, score = await gm.check_answer(user_answer)
+                is_correct, score, answer, hints = await gm.check_answer(user_answer)
                 await manager.send_message(client_id, {
                     "type": "answer_result",
                     "correct": is_correct,
-                    "score": score
+                    "score": score,
+                    "answer": answer,
+                    "hints": hints
                 })
                 # Cancel any timer
                 hint_tasks[client_id].cancel()
-                task = asyncio.create_task(send_hints_timed(gm, client_id))
-                hint_tasks[client_id] = task
             elif msg_type == "end_game":
-                print(f"Ending game for client {client_id}")
-                gm_id = await gmFactory.end_game(client_id)
+                print('GAME ENDED')
+                await gmFactory.end_game(client_id)
                 if hint_tasks.get(client_id):
                     hint_tasks[client_id].cancel()
                     hint_tasks.pop(client_id, None)
 
+                print('status sent')
+            elif msg_type == "downvote_question":
+                q_id = gm.downvote_question()
+                print(f"GM Downvoted question {q_id}")
                 await manager.send_message(client_id, {
                     "type": "game_status",
-                    "status": "Game ended",
-                    "gm_id": gm_id
+                    "status": f"Downvoted question {q_id}"
                 })
 
     # Handle disconnect and other errors
