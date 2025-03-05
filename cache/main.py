@@ -43,6 +43,22 @@ redis_client = None
 def background_task():
     print("Running background task")
 
+DOWNVOTE_THRESHOLD = 3
+USAGE_THRESHOLD = 5
+EVICT_PERIOD = 5 # minutes
+def evict_questions_from_db(downvote_threshold=DOWNVOTE_THRESHOLD, usage_threshold=USAGE_THRESHOLD):
+    print("Checking for questions to evict")
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        query = """
+            DELETE FROM questions
+            WHERE usage_count >= %s OR downvote_count >= %s
+        """
+        cursor.execute(query, (USAGE_THRESHOLD, DOWNVOTE_THRESHOLD))
+        conn.commit()
+        cursor.close()
+
 # FastAPI app
 @asynccontextmanager
 async def lifespan(app):
@@ -84,6 +100,14 @@ async def lifespan(app):
         id="background_task",
         replace_existing=True
     )
+    scheduler.add_job(
+        evict_questions_from_db,
+        trigger=IntervalTrigger(minutes=EVICT_PERIOD),
+        id="evict_questions",
+        replace_existing=False,
+        args=(DOWNVOTE_THRESHOLD, USAGE_THRESHOLD)
+    )
+
     scheduler.start()
 
     yield
