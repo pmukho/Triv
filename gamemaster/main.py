@@ -5,6 +5,8 @@ from gmfactory import GmFactory
 import json
 import psycopg2
 import os
+from pydantic import BaseModel
+
 
 app = FastAPI()
 app.add_middleware(
@@ -158,6 +160,44 @@ async def send_hints_timed(game_master, client_id: int):
         print(f"send_hints_timed task cancelled for client {client_id}")
     except Exception as e:
         print(f"Error sending hints to client {client_id}: {e}")
+
+
+
+class LoginData(BaseModel):
+    username: str
+    client_id: str
+@app.post('/ws/login')
+async def login(data: LoginData):
+    print(f"Logging in user {data.username} with client_id {data.client_id},", flush=True) 
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT username, id FROM users WHERE id = %s", (data.client_id,))
+        user = cursor.fetchone()
+        print("User is:",user, flush=True)
+        if user:
+            if user[0] != data.username:
+                cursor.execute("UPDATE users SET username = %s WHERE id = %s", (data.username, data.client_id))
+                conn.commit()
+                print("Username updated", flush=True)
+            print("User found", flush=True)
+            return {"ok": True,"status": "User found, Username changed"}
+        else:
+            print("User not found, creating new user", flush=True)
+            cursor.execute("INSERT INTO users (username, id) VALUES (%s, %s) RETURNING id", (data.username, data.client_id))
+            print("User created", flush=True)
+            conn.commit()
+            return {"ok": True,"status": "User found, Username changed"}
+    except Exception as e:
+        print(f"Error logging in: {str(e)}", flush=True)
+        return {"ok":False,"error": "Internal server error"}, 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
 
 @app.get('/ws/leaderboard/get_leaderboard')
 async def get_leaderboard():

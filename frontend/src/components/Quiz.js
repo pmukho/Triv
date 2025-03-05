@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import ParticlesBackground from './ParticlesBackground';
 
-const myId = Math.floor(Math.random() * 100);
 const DEFAULT_PANELS = {
   1: { content: 'Loading...', visible: true },
   2: { content: 'Loading...', visible: false },
@@ -84,7 +83,6 @@ const Quiz = () => {
     const newScore = rawScore;
     setScore(newScore);
     localStorage.setItem('score', newScore);
-
     // Reveal hints
     setPanels(DEFAULT_PANELS);
     setPanels((prev) => {
@@ -124,7 +122,8 @@ const Quiz = () => {
 
   // WebSocket connection management
   useEffect(() => {
-    const wsUrl = `/ws/quiz/${myId}?${maxQuestions}`;
+    const id = localStorage.getItem('id');
+    const wsUrl = `/ws/quiz/${id}?${maxQuestions}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 

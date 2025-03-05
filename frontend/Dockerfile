@@ -7,9 +7,12 @@ WORKDIR /app
 COPY ./package*.json ./
 RUN npm install
 
+RUN npm install @react-oauth/google
+RUN npm install jwt-decode
 # Copy the rest of the source code and build production version
 COPY . .
-RUN npm run build
+RUN npm run build --verbose
+
 
 # Stage 2: Serve the built app with NGINX
 FROM nginx:stable-alpine
