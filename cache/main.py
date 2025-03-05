@@ -39,7 +39,7 @@ redis_host = "redis"
 redis_port = 6379
 redis_client = None
 
-# Background tasks
+# Scheduled background tasks that will run periodically on separate thread
 def background_task():
     print("Running background task")
 
@@ -146,17 +146,24 @@ async def get_db_batch(batch_req: GameBatchReq, fetch_count: int = 10):
     params = []
     for elem in batch_req.batch:
         query = f"""
-            (SELECT *
-            FROM questions q
-            LEFT JOIN user_question_store uqs 
-                ON q.id = uqs.question_id 
-                AND uqs.user_id = %s
-            WHERE uqs.question_id IS NULL
-                AND q.category = %s
-            LIMIT %s)
+            (WITH updated AS (
+                UPDATE questions
+                SET usage_count = usage_count + 1
+                WHERE id IN (
+                    SELECT q.id FROM questions q
+                    LEFT JOIN user_question_store uqs
+                        ON q.id = uqs.question_id 
+                        AND uqs.user_id = %s
+                    WHERE uqs.question_id IS NULL
+                        AND q.category = %s
+                    LIMIT %s
+                ) 
+                RETURNING *
+            )
+            SELECT * FROM updated)
         """
         queries.append(query)
-        params.extend([user_id, elem.category, fetch_count])       
+        params.extend([user_id, elem.category, max(fetch_count, elem.count)])       
     query = " UNION ALL ".join(queries)
     print("Query: ", query)
     
@@ -165,6 +172,9 @@ async def get_db_batch(batch_req: GameBatchReq, fetch_count: int = 10):
         cursor = conn.cursor()
         cursor.execute(query, params)
         questions = cursor.fetchall()
+        conn.commit()
+        cursor.close()
+
         print("Fetched questions: ", questions)
         questions = [Question(
             id=q[0],
