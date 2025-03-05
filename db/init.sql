@@ -74,11 +74,15 @@ CREATE TABLE IF NOT EXISTS game_results (
     game_id VARCHAR(255) NOT NULL,
     user_id VARCHAR(255), --Right now, we are not enforcing foreign key constraint becuase we don't have user table being filled becuase there is no auth. This will change
     score INT DEFAULT 0,
+    game_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    game_length INT DEFAULT 0,
     PRIMARY KEY (game_id)
 );
 
 CREATE TABLE IF NOT EXISTS questions_in_game (
     question_id VARCHAR(255) REFERENCES questions(id),
+    question_number INT NOT NULL,
     game_id VARCHAR(255) REFERENCES game_results(game_id),
-    PRIMARY KEY (question_id)
+    PRIMARY KEY (game_id,question_number),
+    CHECK (question_number BETWEEN 1 AND 10)
 );

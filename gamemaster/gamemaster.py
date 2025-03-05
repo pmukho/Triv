@@ -42,7 +42,6 @@ class GameMaster:
             "batch_size": 2,
             "batch": [{"category": "CAT1", "count": 3}, {"category": "CAT2", "count": 3}]
         }
-
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(f"{CACHE_SERVICE_URL}/getbatch/", json=payload)
@@ -143,14 +142,14 @@ class GameMaster:
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO game_results (user_id, game_id, score)
-            VALUES (%s ,%s, %s)
-        """, (self.client_id, self.id, self.score))
-        for question in self.questions:
+            INSERT INTO game_results (game_id,user_id, score,game_length,game_timestamp)
+            VALUES (%s ,%s, %s, %s, NOW())
+        """, (self.id, self.client_id, self.score, len(self.questions)))
+        for question_number,question in enumerate(self.questions):
             cursor.execute("""
-                INSERT INTO questions_in_game (game_id, question_id)
-                VALUES (%s, %s)
-            """, (self.id, question["id"]))
+                INSERT INTO questions_in_game (game_id, question_number,question_id)
+                VALUES (%s,%s, %s)
+            """, (self.id,question_number+1,question["id"]))
         conn.commit()
 
         # Test if the data was written
