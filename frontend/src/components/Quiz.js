@@ -81,7 +81,7 @@ const Quiz = () => {
 
   // Handle answer results from the server
   const handleAnswerResult = useCallback((isCorrect, rawScore, correctAns, questionHints) => {
-    const newScore = rawScore * 10;
+    const newScore = rawScore;
     setScore(newScore);
     localStorage.setItem('score', newScore);
 
@@ -98,7 +98,7 @@ const Quiz = () => {
 
     setAnswerRevealed(true);
     setCorrectAnswer(correctAns || 'Unknown');
-    setPostAnswerTimeLeft(5);
+    setPostAnswerTimeLeft(1);
   }, []);
 
   // Dispatch server messages based on type

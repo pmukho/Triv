@@ -1,22 +1,51 @@
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import ParticlesBackground from './ParticlesBackground';
-
+const getLeaderboard = async () => {
+    try {
+        const res = await fetch(`/ws/leaderboard/get_leaderboard`, {
+            method: 'GET',
+        });
+        const data = await res.json();
+        return data; // Return the API response
+    } catch (error) {
+        console.log('Error:', error);
+        return { error: "An error occurred while submitting the answer." };
+    }   
+};
 const Leaderboard = () => {
     const navigate = useNavigate();
-    const [animatedPlayers, setAnimatedPlayers] = useState([]);
-
-    // Example data - replace with your actual data
-    const players = [
+    const [animatedPlayers, setAnimatedPlayers] = useState([])
+    const [players, setPlayers] = useState([
         { name: "Player 1", score: 1500, email: "player1@example.com" },
         { name: "Player 2", score: 1200, email: "player2@example.com" },
         { name: "Player 3", score: 1000, email: "player3@example.com" },
         { name: "Player 4", score: 800, email: "player4@example.com" },
         { name: "Player 5", score: 600, email: "player5@example.com" },
-    ];
-
+    ]);
+    const [loaded, setLoaded] = useState(false);
+    // Actual data fetching from the API
+    useEffect(() => {
+        const fetchLeaderboard = async () => {
+            const data = await getLeaderboard();
+            if (!data.error) {
+                console.log(data);
+                setPlayers(
+                    data.map((player, index) => ({
+                        name: player.username,
+                        score: player.score,
+                        email: "user" + index + "@example.com"
+                    }))
+                );
+                setLoaded(true);
+            }
+        };
+        fetchLeaderboard();
+        console.log(players);
+    }, []);
     useEffect(() => {
         // Animate players one by one
+        if (loaded) {
         const timer = setInterval(() => {
             if (animatedPlayers.length < players.length) {
                 setAnimatedPlayers(prev => [...prev, players[prev.length]]);
@@ -24,8 +53,8 @@ const Leaderboard = () => {
         }, 200); // Adjust timing as needed
 
         return () => clearInterval(timer);
-    }, [animatedPlayers.length]);
-
+    }
+    }, [animatedPlayers.length,loaded]);
     return (
         <div className="relative min-h-screen">
             <ParticlesBackground />

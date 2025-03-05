@@ -102,7 +102,7 @@ class GameMaster:
             correct_answer = q["answer"]
 
             if self._advanced_answer_check(answer, correct_answer):
-                self.score += 1
+                self.score += 10
                 result = True
             else:
                 result = False

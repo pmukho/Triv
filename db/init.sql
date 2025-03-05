@@ -41,7 +41,14 @@ CREATE TABLE IF NOT EXISTS users (
 INSERT INTO users (id, username) VALUES
 ('1', 'user1'),
 ('2', 'user2'),
-('3', 'user3');
+('3', 'user3'),
+('4', 'user4'),
+('5', 'user5'),
+('6', 'user6'),
+('7', 'user7'),
+('8', 'user8'),
+('9', 'user9'),
+('10', 'user10');
 
 CREATE TABLE IF NOT EXISTS user_question_store (
     user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
@@ -86,3 +93,14 @@ CREATE TABLE IF NOT EXISTS questions_in_game (
     PRIMARY KEY (game_id,question_number),
     CHECK (question_number BETWEEN 1 AND 10)
 );
+
+INSERT INTO game_results (game_id, user_id, score, game_length) VALUES
+('a', '1', 1, 10),
+('b', '2', 2, 10),
+('c', '3', 3, 10),
+('d', '1', 4, 10),
+('e', '2', 5, 10),
+('f', '3', 6, 10),
+('g', '8', 6, 10),
+('h', '9', 8, 10),
+('i', '10', 9, 10);

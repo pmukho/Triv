@@ -3,14 +3,29 @@ from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 from gmfactory import GmFactory
 import json
+import psycopg2
+import os
 
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost"],
-    allow_methods=["POST"],
+    allow_origins=["http://localhost","http://localhost:80"],
+    allow_methods=["POST,GET"],
     allow_headers=["*"],
 )
+
+DB_CONFIG = {
+    "dbname": os.environ.get("POSTGRES_DB"),
+    "user": os.environ.get("POSTGRES_USER"),
+    "password": os.environ.get("POSTGRES_PASSWORD"),
+    "host": "postgres-db",
+    "port": "5432"
+}
+
+def get_db_connection():
+    conn = psycopg2.connect(**DB_CONFIG)
+    return conn
+
 
 class ConnectionManager:
     def __init__(self):
@@ -143,4 +158,37 @@ async def send_hints_timed(game_master, client_id: int):
         print(f"send_hints_timed task cancelled for client {client_id}")
     except Exception as e:
         print(f"Error sending hints to client {client_id}: {e}")
+
+@app.get('/ws/leaderboard/get_leaderboard')
+async def get_leaderboard():
+    try:
+        print("Getting leaderboard", flush=True)
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        leaderboard = """
+        SELECT users.username, game_results.score
+        FROM game_results
+        JOIN users ON game_results.user_id = users.id
+        ORDER BY game_results.score DESC
+        LIMIT 10
+        """
+        cursor.execute(leaderboard)
+        results = cursor.fetchall()
+        print({"data": results}, flush=True)
+        leaderboard_data = [
+            {
+                "username": row[0],
+                "score": row[1]
+            }
+            for row in results
+        ]
+        return leaderboard_data
+    except Exception as e:
+        print(f"Error fetching leaderboard: {str(e)}", flush=True)
+        return {"error": "Internal server error"}, 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
