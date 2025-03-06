@@ -70,28 +70,33 @@ def read_questions(articles: Articles):
 
         # prompt += "\n The first clue should be prefaced with '*|*', the second with '*|*', and the third with *|*.'. The answer should be prefaced with '*|*'."
 
-        completion = llm.chat.completions.create(
-            # model="gpt-4o",
-            model="gpt-4.5-preview",
-            messages=[
-                {"role": "developer", "content": "You are a helpful assistant."},
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
-        )
-        # print(completion.choices[0].message)
-        print(completion.choices[0].message.content)
-        content = completion.choices[0].message.content
+        while True:
+            completion = llm.chat.completions.create(
+                # model="gpt-4o",
+                model="gpt-4.5-preview",
+                messages=[
+                    {"role": "developer", "content": "You are a helpful assistant."},
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+            )
+            # print(completion.choices[0].message)
+            print(completion.choices[0].message.content)
+            content = completion.choices[0].message.content
 
-        prompt1 = content.split("1.")[1].split("\n2.")[0].strip()
-        prompt2 = content.split("\n2.")[1].split("\n3.")[0].strip()
-        prompt3 = content.split("\n3.")[1].split("ANSWER:")[0].strip()
-        answer = content.split("ANSWER:")[1].strip()
+            prompt1 = content.split("1.")[1].split("\n2.")[0].strip()
+            prompt2 = content.split("\n2.")[1].split("\n3.")[0].strip()
+            prompt3 = content.split("\n3.")[1].split("ANSWER:")[0].strip()
+            answer = content.split("ANSWER:")[1].strip()
 
-        question = Question(prompt1=prompt1, prompt2=prompt2, prompt3=prompt3, answer=answer)
-        questions.append(question)
+            if len(prompt1) and len(prompt2) and len(prompt3) and len(answer):
+                question = Question(prompt1=prompt1, prompt2=prompt2, prompt3=prompt3, answer=answer)
+                questions.append(question)
+                break
+            else:
+                print("Invalid completion. Trying again.")
     
     return Questions(questions=questions, ok=ok, error=error)
 
