@@ -7,6 +7,8 @@ import os
 from models import _GameBatchReqElem, GameBatchReq, Question, GameBatchResp, DownvoteBatchReq
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.executors.pool import ThreadPoolExecutor
+import time
 
 # Database connection related settings
 db_name = os.environ.get("POSTGRES_DB")
@@ -40,13 +42,15 @@ redis_port = 6379
 redis_client = None
 
 # Scheduled background tasks that will run periodically on separate thread
-def background_task():
-    print("Running background task")
+executors = {
+    "default": ThreadPoolExecutor(1)
+}
+scheduler = BackgroundScheduler(executors=executors)
 
-DOWNVOTE_THRESHOLD = 3
-USAGE_THRESHOLD = 5
-EVICT_PERIOD = 5 # minutes
-def evict_questions_from_db(downvote_threshold=DOWNVOTE_THRESHOLD, usage_threshold=USAGE_THRESHOLD):
+DOWNVOTE_THRESHOLD = os.environ.get("DOWNVOTE_THRESHOLD", 3)
+USAGE_THRESHOLD = os.environ.get("USAGE_THRESHOLD", 5)
+DB_EVICT_PERIOD = os.environ.get("DB_EVICT_PERIOD", 5)
+def evict_questions_from_db():
     print("Checking for questions to evict")
 
     with get_db_connection() as conn:
@@ -58,6 +62,80 @@ def evict_questions_from_db(downvote_threshold=DOWNVOTE_THRESHOLD, usage_thresho
         cursor.execute(query, (USAGE_THRESHOLD, DOWNVOTE_THRESHOLD))
         conn.commit()
         cursor.close()
+
+CATEGORIES = [] # set by lifespan start
+MIN_THRESHOLD_FACTOR = os.environ.get("MIN_THRESHOLD_FACTOR", 0.1)
+PROACTIVE_FETCH_COUNT = os.environ.get("PROACTIVE_FETCH_COUNT", 5)
+QGEN_BATCH_SIZE = os.environ.get("QGEN_BATCH_SIZE", 10)
+GENERATE_CHECK_PERIOD = os.environ.get("GENERATE_CHECK_PERIOD", 5)
+def generate_questions_as_needed():
+    print("Checking counts per category")
+
+    # Fetch category counts for questions and articles
+    question_counts = {}
+    article_counts = {}
+    fetch_batch = []
+    with get_db_connection() as conn, conn.cursor() as cursor:
+        # Assumes that the number of questions marked for eviction is small
+        query = """
+            SELECT category, COUNT(*) FROM questions
+            GROUP BY category;
+        """
+        cursor.execute(query)
+        q_counts = cursor.fetchall()
+        for cat, count in q_counts:
+            question_counts[cat] = count
+
+        query = """
+            SELECT category, COUNT(*) FROM wiki_articles
+            WHERE 
+                last_used IS NULL OR
+                last_used < NOW() - INTERVAL '1 day'
+                GROUP BY category;
+            """
+        cursor.execute(query)
+        a_counts = cursor.fetchall()
+        for cat, count in a_counts:
+            article_counts[cat] = count
+
+        # See if we need to generate more questions
+        for cat in CATEGORIES:
+            a_count = article_counts.get(cat, None)
+            if a_count is None:
+                print(f"Category {cat} exhausted for articles")
+                continue
+            
+            min_threshold = max(int(MIN_THRESHOLD_FACTOR * a_count), 1)
+            q_count = question_counts.get(cat, 0)
+            if q_count < min_threshold:
+                query = """
+                    SELECT title FROM wiki_articles
+                    WHERE 
+                        category = %s AND
+                        (last_used IS NULL OR
+                        last_used < NOW() - INTERVAL '1 day')
+                    LIMIT %s;
+                """
+
+                cursor.execute(query, (cat, PROACTIVE_FETCH_COUNT))
+                articles = cursor.fetchall()
+                print(articles)
+                fetch_batch.extend([(cat, a) for a in articles])
+    
+    # Fetch questions for articles
+    for i in range(0, len(fetch_batch), QGEN_BATCH_SIZE):
+        batch = fetch_batch[i:i+QGEN_BATCH_SIZE]
+        # will be schedule to run right away
+        scheduler.add_job(
+            fetch_and_store_questions,
+            args=(batch,),
+            replace_existing=False,
+        )
+
+def fetch_and_store_questions(category_title_batch):
+    print("Fetching questions for articles")
+    print(category_title_batch)
+    time.sleep(20)
 
 # FastAPI app
 @asynccontextmanager
@@ -91,23 +169,31 @@ async def lifespan(app):
     except Exception as e:
         print("Failed to connect to PostgreSQL", e)
         raise
-    
+
+    # Fetch categories from databse
+    print("Fetching categories")
+    global CATEGORIES
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT DISTINCT category FROM wiki_articles")
+        CATEGORIES = cursor.fetchall()
+        CATEGORIES = [c[0] for c in CATEGORIES]
+        cursor.close()
+    print("Categories: ", CATEGORIES)
+
     # Start background scheduler
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(
-        background_task,
-        trigger=IntervalTrigger(minutes=1),
-        id="background_task",
-        replace_existing=True
-    )
     scheduler.add_job(
         evict_questions_from_db,
-        trigger=IntervalTrigger(minutes=EVICT_PERIOD),
+        trigger=IntervalTrigger(minutes=DB_EVICT_PERIOD),
         id="evict_questions",
         replace_existing=False,
-        args=(DOWNVOTE_THRESHOLD, USAGE_THRESHOLD)
     )
-
+    scheduler.add_job(
+        generate_questions_as_needed,
+        trigger=IntervalTrigger(minutes=GENERATE_CHECK_PERIOD),
+        id="generate_questions",
+        replace_existing=False,
+    )
     scheduler.start()
 
     yield
