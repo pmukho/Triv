@@ -2,19 +2,55 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ParticlesBackground from './ParticlesBackground';
+import { GoogleLogin } from '@react-oauth/google';
+import { jwtDecode } from "jwt-decode";
+
+const sendLogin = async (clientId, userName) => {
+    try {
+        console.log('Sending login request with username:', userName, 'and client ID:', clientId);
+        const res = await fetch(`/ws/login`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ username: userName, client_id: clientId }),
+        });
+        const data = await res.json();
+        console.log("Data:", data);
+        return data; // Return the API response
+    } catch (error) {
+        console.log('Error:', error);
+        return { error: "An error occurred while submitting the answer." };
+    }
+};
 
 const Login = () => {
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const navigate = useNavigate();
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        // You can add validation here if needed
+    const handleError = () => {
+        console.log('Login Failed');
+        // Handle login error
+    };
+
+    const handleSuccess = async (credentialResponse) => {
         // Store user info in localStorage or state management
+        const decoded = jwtDecode(credentialResponse.credential);
+        const email = decoded.email;
+        const userId = decoded.sub;
+        console.log('Login Success:', name, email, userId);
         localStorage.setItem('userName', name);
-        localStorage.setItem('userEmail', email);
-        navigate("/quiz", { state: { maxQuestions : 5 }}); // Navigate to quiz instead of leaderboard
+        localStorage.setItem('id', userId);
+        const response = await sendLogin(userId, name);
+        console.log('Response:', response);
+        navigate("/quiz", { state: { maxQuestions : 5 }}); 
+    };
+
+    const handleSubmit = (e) => {
+        // You can add validation here if needed
+        // For now, we'll just call handleSuccess with a mock credentialResponse
+        //handleSuccess({ clientId: 'mockClientId' });
     };
 
     return (
@@ -30,7 +66,7 @@ const Login = () => {
                     </div>
                     <div className="w-full md:w-1/2 p-12">
                         <h2 className="text-4xl font-bold text-center mb-10">TRIVIA GAME</h2>
-                        <form onSubmit={handleSubmit} className="space-y-6">
+                        <form className="space-y-6" onSubmit={handleSubmit}>
                             <input 
                                 type="text" 
                                 placeholder="Name" 
@@ -39,20 +75,21 @@ const Login = () => {
                                 className="w-full p-4 text-xl border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 required
                             />
-                            <input 
+                            {/* <input 
                                 type="email" 
                                 placeholder="Email" 
                                 value={email} 
                                 onChange={(e) => setEmail(e.target.value)} 
                                 className="w-full p-4 text-xl border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 required
-                            />
-                            <button 
-                                type="submit" 
+                            /> */}
+                            <GoogleLogin onSuccess={handleSuccess} onError={handleError} />
+                            {/* <button 
+                                type="submit"
                                 className="w-full bg-blue-500 text-white py-4 text-xl rounded-md font-bold hover:bg-blue-600 transition"
                             >
-                                Start Quiz
-                            </button>
+                                Submit
+                            </button> */}
                         </form>
                         <button 
                             onClick={() => navigate("/leaderboard")} 
@@ -68,5 +105,3 @@ const Login = () => {
 };
 
 export default Login;
-
-

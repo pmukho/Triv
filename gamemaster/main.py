@@ -3,14 +3,31 @@ from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 from gmfactory import GmFactory
 import json
+import psycopg2
+import os
+from pydantic import BaseModel
+
 
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost"],
-    allow_methods=["POST"],
+    allow_origins=["http://localhost","http://localhost:80"],
+    allow_methods=["POST,GET"],
     allow_headers=["*"],
 )
+
+DB_CONFIG = {
+    "dbname": os.environ.get("POSTGRES_DB"),
+    "user": os.environ.get("POSTGRES_USER"),
+    "password": os.environ.get("POSTGRES_PASSWORD"),
+    "host": "postgres-db",
+    "port": "5432"
+}
+
+def get_db_connection():
+    conn = psycopg2.connect(**DB_CONFIG)
+    return conn
+
 
 class ConnectionManager:
     def __init__(self):
@@ -143,4 +160,75 @@ async def send_hints_timed(game_master, client_id: int):
         print(f"send_hints_timed task cancelled for client {client_id}")
     except Exception as e:
         print(f"Error sending hints to client {client_id}: {e}")
+
+
+
+class LoginData(BaseModel):
+    username: str
+    client_id: str
+@app.post('/ws/login')
+async def login(data: LoginData):
+    print(f"Logging in user {data.username} with client_id {data.client_id},", flush=True) 
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT username, id FROM users WHERE id = %s", (data.client_id,))
+        user = cursor.fetchone()
+        print("User is:",user, flush=True)
+        if user:
+            if user[0] != data.username:
+                cursor.execute("UPDATE users SET username = %s WHERE id = %s", (data.username, data.client_id))
+                conn.commit()
+                print("Username updated", flush=True)
+            print("User found", flush=True)
+            return {"ok": True,"status": "User found, Username changed"}
+        else:
+            print("User not found, creating new user", flush=True)
+            cursor.execute("INSERT INTO users (username, id) VALUES (%s, %s) RETURNING id", (data.username, data.client_id))
+            print("User created", flush=True)
+            conn.commit()
+            return {"ok": True,"status": "User found, Username changed"}
+    except Exception as e:
+        print(f"Error logging in: {str(e)}", flush=True)
+        return {"ok":False,"error": "Internal server error"}, 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+
+@app.get('/ws/leaderboard/get_leaderboard')
+async def get_leaderboard():
+    try:
+        print("Getting leaderboard", flush=True)
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        leaderboard = """
+        SELECT users.username, game_results.score
+        FROM game_results
+        JOIN users ON game_results.user_id = users.id
+        ORDER BY game_results.score DESC
+        LIMIT 10
+        """
+        cursor.execute(leaderboard)
+        results = cursor.fetchall()
+        print({"data": results}, flush=True)
+        leaderboard_data = [
+            {
+                "username": row[0],
+                "score": row[1]
+            }
+            for row in results
+        ]
+        return leaderboard_data
+    except Exception as e:
+        print(f"Error fetching leaderboard: {str(e)}", flush=True)
+        return {"error": "Internal server error"}, 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 

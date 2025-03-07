@@ -41,7 +41,14 @@ CREATE TABLE IF NOT EXISTS users (
 INSERT INTO users (id, username) VALUES
 ('1', 'user1'),
 ('2', 'user2'),
-('3', 'user3');
+('3', 'user3'),
+('4', 'user4'),
+('5', 'user5'),
+('6', 'user6'),
+('7', 'user7'),
+('8', 'user8'),
+('9', 'user9'),
+('10', 'user10');
 
 CREATE TABLE IF NOT EXISTS user_question_store (
     user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
@@ -69,3 +76,31 @@ CREATE TABLE IF NOT EXISTS wiki_articles (
 COPY wiki_articles(title, category) 
 FROM '/docker-entrypoint-initdb.d/data/wiki_articles.csv' 
 DELIMITER ',' CSV HEADER;
+
+CREATE TABLE IF NOT EXISTS game_results (
+    game_id VARCHAR(255) NOT NULL,
+    user_id VARCHAR(255), --Right now, we are not enforcing foreign key constraint becuase we don't have user table being filled becuase there is no auth. This will change
+    score INT DEFAULT 0,
+    game_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    game_length INT DEFAULT 0,
+    PRIMARY KEY (game_id)
+);
+
+CREATE TABLE IF NOT EXISTS questions_in_game (
+    question_id VARCHAR(255) REFERENCES questions(id),
+    question_number INT NOT NULL,
+    game_id VARCHAR(255) REFERENCES game_results(game_id),
+    PRIMARY KEY (game_id,question_number),
+    CHECK (question_number BETWEEN 1 AND 10)
+);
+
+INSERT INTO game_results (game_id, user_id, score, game_length) VALUES
+('a', '1', 1, 10),
+('b', '2', 2, 10),
+('c', '3', 3, 10),
+('d', '1', 4, 10),
+('e', '2', 5, 10),
+('f', '3', 6, 10),
+('g', '8', 6, 10),
+('h', '9', 8, 10),
+('i', '10', 9, 10);

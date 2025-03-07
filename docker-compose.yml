@@ -80,7 +80,7 @@ services:
       dockerfile: Dockerfile
     container_name: game-factory
     ports:
-      - "8003:8003"
+      - "8003:8000"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}

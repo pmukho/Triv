@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import ParticlesBackground from './ParticlesBackground';
 
-const myId = Math.floor(Math.random() * 100);
 const DEFAULT_PANELS = {
   1: { content: 'Loading...', visible: true },
   2: { content: 'Loading...', visible: false },
@@ -81,10 +80,9 @@ const Quiz = () => {
 
   // Handle answer results from the server
   const handleAnswerResult = useCallback((isCorrect, rawScore, correctAns, questionHints) => {
-    const newScore = rawScore * 10;
+    const newScore = rawScore;
     setScore(newScore);
     localStorage.setItem('score', newScore);
-
     // Reveal hints
     setPanels(DEFAULT_PANELS);
     setPanels((prev) => {
@@ -98,7 +96,7 @@ const Quiz = () => {
 
     setAnswerRevealed(true);
     setCorrectAnswer(correctAns || 'Unknown');
-    setPostAnswerTimeLeft(5);
+    setPostAnswerTimeLeft(1);
   }, []);
 
   // Dispatch server messages based on type
@@ -124,7 +122,8 @@ const Quiz = () => {
 
   // WebSocket connection management
   useEffect(() => {
-    const wsUrl = `/ws/quiz/${myId}?${maxQuestions}`;
+    const id = localStorage.getItem('id');
+    const wsUrl = `/ws/quiz/${id}?${maxQuestions}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 

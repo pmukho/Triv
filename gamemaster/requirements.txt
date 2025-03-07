@@ -5,3 +5,4 @@ fastapi
 pydantic
 httpx
 websockets
+psycopg2-binary

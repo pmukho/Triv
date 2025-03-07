@@ -1,11 +1,25 @@
 import httpx
 import re
 import difflib
+import psycopg2
+import os
 
 CACHE_SERVICE_URL = "http://cache:8000"
 MIN_ANSWER_SIMILARITY = 0.8
 MIN_TOKEN_SIMILARITY = 0.5
 DEFAULT_MAX_QUESTIONS = 5
+DB_CONFIG = {
+    "dbname": os.environ.get("POSTGRES_DB"),
+    "user": os.environ.get("POSTGRES_USER"),
+    "password": os.environ.get("POSTGRES_PASSWORD"),
+    "host": "postgres-db",
+    "port": "5432"
+}
+
+def get_db_connection():
+    conn = psycopg2.connect(**DB_CONFIG)
+    return conn
+
 
 class GameMaster:
     def __init__(self, client_id, gm_instance_id, max_questions=DEFAULT_MAX_QUESTIONS):
@@ -28,7 +42,6 @@ class GameMaster:
             "batch_size": 2,
             "batch": [{"category": "CAT1", "count": 3}, {"category": "CAT2", "count": 3}]
         }
-
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(f"{CACHE_SERVICE_URL}/getbatch/", json=payload)
@@ -89,7 +102,7 @@ class GameMaster:
             correct_answer = q["answer"]
 
             if self._advanced_answer_check(answer, correct_answer):
-                self.score += 1
+                self.score += 10
                 result = True
             else:
                 result = False
@@ -124,6 +137,29 @@ class GameMaster:
         
         print(f"Downvoted questions sent {self.downvoted_questions}")
     
-    async def send_data(self, metrics_data):
-        # Implement logic to send data
-        pass
+    async def send_results(self):
+        # Writing Results to DB
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO game_results (game_id,user_id, score,game_length,game_timestamp)
+            VALUES (%s ,%s, %s, %s, NOW())
+        """, (self.id, self.client_id, self.score, len(self.questions)))
+        for question_number,question in enumerate(self.questions):
+            cursor.execute("""
+                INSERT INTO questions_in_game (game_id, question_number,question_id)
+                VALUES (%s,%s, %s)
+            """, (self.id,question_number+1,question["id"]))
+        conn.commit()
+
+        # Test if the data was written
+        cursor.execute("SELECT * FROM questions_in_game WHERE game_id = '%s'", (self.id,))
+        questions = cursor.fetchall()
+        print("Inserted questions:", questions, flush=True)
+
+        cursor.execute("SELECT * FROM game_results WHERE game_id = '%s'", (self.id,))
+        results = cursor.fetchall()
+        print("Inserted game results:", results, flush=True)
+
+        cursor.close()
+        conn.close()
