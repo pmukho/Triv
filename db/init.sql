@@ -32,6 +32,8 @@ INSERT INTO questions (id, category, hint1, hint2, hint3, answer) VALUES
 ('19', 'CAT2', 'h1', 'h2', 'h3', 'ans'),
 ('20', 'CAT2', 'h1', 'h2', 'h3', 'ans');
 
+UPDATE questions SET usage_count = 10 WHERE id = '1';
+UPDATE questions SET downvote_count = 5 WHERE id = '2';
 
 CREATE TABLE IF NOT EXISTS users (
     id VARCHAR(255) PRIMARY KEY,
@@ -70,6 +72,7 @@ INSERT INTO user_question_store (user_id, question_id) VALUES
 CREATE TABLE IF NOT EXISTS wiki_articles (
     title TEXT NOT NULL,
     category TEXT NOT NULL,
+    last_used TIMESTAMP DEFAULT NULL,
     PRIMARY KEY (title, category)
 );
 
@@ -84,14 +87,6 @@ CREATE TABLE IF NOT EXISTS game_results (
     game_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     game_length INT DEFAULT 0,
     PRIMARY KEY (game_id)
-);
-
-CREATE TABLE IF NOT EXISTS questions_in_game (
-    question_id VARCHAR(255) REFERENCES questions(id),
-    question_number INT NOT NULL,
-    game_id VARCHAR(255) REFERENCES game_results(game_id),
-    PRIMARY KEY (game_id,question_number),
-    CHECK (question_number BETWEEN 1 AND 10)
 );
 
 INSERT INTO game_results (game_id, user_id, score, game_length) VALUES

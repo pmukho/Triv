@@ -1,115 +1,267 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-import asyncio
+from contextlib import asynccontextmanager, contextmanager
 import redis.asyncio as redis
-from pydantic import BaseModel
-import psycopg2
+from psycopg2 import pool
 import os
+from models import _GameBatchReqElem, GameBatchReq, Question, GameBatchResp, DownvoteBatchReq
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.executors.pool import ThreadPoolExecutor
 import datetime
 import httpx
 
-DB_CONFIG = {
-    "dbname": os.environ.get("POSTGRES_DB"),
-    "user": os.environ.get("POSTGRES_USER"),
-    "password": os.environ.get("POSTGRES_PASSWORD"),
-    "host": "postgres-db",
-    "port": "5432"
-}
+# Database connection related settings
+db_name = os.environ.get("POSTGRES_DB")
+db_user = os.environ.get("POSTGRES_USER")
+db_password = os.environ.get("POSTGRES_PASSWORD")
+db_host = "postgres-db"
+db_port = "5432"
+MAX_DB_CONNECTIONS = 5
+MIN_DB_CONNECTIONS = 1
 
+db_conn_pool = pool.ThreadedConnectionPool(
+    minconn=MIN_DB_CONNECTIONS,
+    maxconn=MAX_DB_CONNECTIONS,
+    user=db_user,
+    password=db_password,
+    host=db_host,
+    port=db_port
+)
+@contextmanager
 def get_db_connection():
-    conn = psycopg2.connect(**DB_CONFIG)
-    return conn
+    conn = db_conn_pool.getconn()
+    try:
+        yield conn
+    finally:
+        db_conn_pool.putconn(conn)
 
+# Redis connection related settings
+MAX_REDIS_CONNECTIONS = 10
+redis_host = "redis"
+redis_port = 6379
 redis_client = None
 
-class _GameBatchReqElem(BaseModel):
-    category: str
-    count: int
+# Scheduled background tasks that will run periodically on separate thread
+executors = {
+    "default": ThreadPoolExecutor(1)
+}
+scheduler = BackgroundScheduler(
+    executors=executors,
+    job_defaults={"misfire_grace_time": 60},
+    timezone="UTC"
+)
 
-class GameBatchReq(BaseModel):
-    user_id: str
-    batch_size: int
-    batch: list[_GameBatchReqElem]
+DOWNVOTE_THRESHOLD = os.environ.get("DOWNVOTE_THRESHOLD", 3)
+USAGE_THRESHOLD = os.environ.get("USAGE_THRESHOLD", 5)
+DB_EVICT_PERIOD = os.environ.get("DB_EVICT_PERIOD", 5) # in minutes
+def evict_questions_from_db():
+    print("Checking for questions to evict")
 
-class Question(BaseModel):
-    id: str
-    category: str
-    hint1: str
-    hint2: str
-    hint3: str
-    answer: str
-    created_at: datetime.datetime
-    usage_count: int
-    downvotes: int
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        query = """
+            DELETE FROM questions
+            WHERE 
+                usage_count >= %s OR 
+                downvote_count >= %s OR
+                created_at < NOW() - Interval '2 days';
+        """
+        cursor.execute(query, (USAGE_THRESHOLD, DOWNVOTE_THRESHOLD))
+        conn.commit()
+        cursor.close()
 
-class GameBatchResp(BaseModel):
-    batch: list[Question]
+CATEGORIES = [] # set by lifespan start
+MIN_THRESHOLD_FACTOR = os.environ.get("MIN_THRESHOLD_FACTOR", 0.1)
+PROACTIVE_FETCH_COUNT = os.environ.get("PROACTIVE_FETCH_COUNT", 5)
+QGEN_BATCH_SIZE = os.environ.get("QGEN_BATCH_SIZE", 10)
+GENERATE_CHECK_PERIOD = os.environ.get("GENERATE_CHECK_PERIOD", 5) # in minutes
+def generate_questions_as_needed():
+    print("Checking counts per category")
 
-class DownvoteBatchReq(BaseModel):
-    user_id: str
-    batch: list[str]
+    # Fetch category counts for questions and articles
+    question_counts = {}
+    article_counts = {}
+    fetch_batch = []
+    with get_db_connection() as conn, conn.cursor() as cursor:
+        # Assumes that the number of questions marked for eviction is small
+        query = """
+            SELECT category, COUNT(*) FROM questions
+            GROUP BY category;
+        """
+        cursor.execute(query)
+        q_counts = cursor.fetchall()
+        for cat, count in q_counts:
+            question_counts[cat] = count
 
-async def generate_questions():
-    print("Notifying QGen", datetime.datetime.now())
+        query = """
+            SELECT category, COUNT(*) FROM wiki_articles
+            WHERE 
+                last_used IS NULL OR
+                last_used < NOW() - INTERVAL '1 day'
+                GROUP BY category;
+            """
+        cursor.execute(query)
+        a_counts = cursor.fetchall()
+        for cat, count in a_counts:
+            article_counts[cat] = count
+
+        # See if we need to generate more questions
+        for cat in CATEGORIES:
+            a_count = article_counts.get(cat, None)
+            if a_count is None:
+                print(f"Category {cat} exhausted for articles")
+                continue
+            
+            min_threshold = max(int(MIN_THRESHOLD_FACTOR * a_count), 1)
+            q_count = question_counts.get(cat, 0)
+            if q_count < min_threshold:
+                print(f"Category {cat} needs more questions: {q_count} < {min_threshold}")
+                query = """
+                    SELECT title FROM wiki_articles
+                    WHERE 
+                        category = %s AND
+                        (last_used IS NULL OR
+                        last_used < NOW() - INTERVAL '1 day')
+                    LIMIT %s;
+                """
+
+                cursor.execute(query, (cat, PROACTIVE_FETCH_COUNT))
+                articles = cursor.fetchall()
+                articles = [a[0] for a in articles]
+                fetch_batch.extend([(title, cat) for title in articles])
     
-    articles_map = {
-        "Usain_Bolt": "PEOPLE",
-        "Babe_Ruth": "PEOPLE",
-        "Christopher_Columbus": "PEOPLE",
-        "Albert_Einstein": "PEOPLE",
-        "Moment_of_inertia": "SCIENCE",
-        "Surface_tension": "SCIENCE",
-        "Water": "SCIENCE",
-        "Rainbow": "SCIENCE"
-    }
-    
-    articles = list(articles_map.keys())
+    # Fetch questions for articles
+    for i in range(0, len(fetch_batch), QGEN_BATCH_SIZE):
+        batch = fetch_batch[i:i+QGEN_BATCH_SIZE]
+        # will be schedule to run right away
+        scheduler.add_job(
+            fetch_and_store_questions,
+            args=(batch,),
+            replace_existing=False,
+            misfire_grace_time=None, # will run eventually
+        )
+
+def fetch_and_store_questions(title_category_batch):
+    print("Fetching questions for articles")
+    print(title_category_batch)
+    titles = [t[0] for t in title_category_batch]
+    categories = [t[1] for t in title_category_batch]
     payload = {
-        "article_names": articles
+        "article_names": titles,
     }
 
-    async with httpx.AsyncClient() as client:
+    # using synchronous client to avoid overloading question-gen
+    questions = []
+    with httpx.Client(timeout=httpx.Timeout(120.0, connect=10.0)) as client:
         try:
-            response = await client.post("http://question-gen:8000/questions", json=payload, timeout=120.0)
+            response = client.post("http://question-gen:8000/questions", json=payload)
             response.raise_for_status()
-            print("Successfully notified QGen")
-            print("Response: ", response.json())
-
-            # write questions to db
             questions = response.json()["questions"]
-            print("Writing questions to db")
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            for i in range(len(questions)):
-                q=questions[i]
-                id = str(100+i)
-                category = articles_map[articles[i]]
-                
-                cursor.execute("""
-                    INSERT INTO questions (id, category, hint1, hint2, hint3, answer)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                """, (id, category, q["prompt1"], q["prompt2"], q["prompt3"], q["answer"]))
-            conn.commit()
-            cursor.close()
-            conn.close()
-            print("Finished writing questions to db")
+            print("Fetched questions: ", questions)
         except Exception as e:
-            print(f"Error notifying QGen: {e}")
+            print("Error fetching questions: ", e)
+            return
+        
+    # Store questions in database
+    with get_db_connection() as conn, conn.cursor() as cursor:
+        placeholders = ",".join(["(%s, %s, %s, %s, %s, %s)"] * len(questions))
+        query = f"""
+            INSERT INTO questions (id, category, hint1, hint2, hint3, answer) VALUES
+            {placeholders}
+            """
+        params = []
+        for i in range(len(questions)):
+            q = questions[i]
+            title = titles[i]
+            category = categories[i]
+            params.extend([
+                title,
+                category,
+                q["prompt1"],
+                q["prompt2"],
+                q["prompt3"],
+                q["answer"]
+            ])
+        cursor.execute(query, params)
+        conn.commit()
 
+        # Update last_used for articles
+        placeholders = ",".join(["%s"] * len(titles))
+        query = f"""
+            UPDATE wiki_articles
+            SET last_used = NOW()
+            WHERE title IN ({placeholders});
+        """
+        cursor.execute(query, titles)
+        conn.commit()
+
+# FastAPI app
 @asynccontextmanager
 async def lifespan(app):
     print("Starting up")
 
-    await generate_questions()
-
+    # Initialize Redis client (no need to manage connection pool)
     global redis_client
-    redis_client = await redis.from_url("redis://redis:6379/0")
+    redis_pool = redis.connection.BlockingConnectionPool(
+        max_connections=MAX_REDIS_CONNECTIONS,
+        host=redis_host,
+        port=redis_port,
+        decode_responses=True
+    )
+    redis_client = redis.Redis(connection_pool=redis_pool)
+    # Test Redis connection
+    try:
+        await redis_client.ping()
+        print("Connected to Redis")
+    except redis.ConnectionError:
+        print("Failed to connect to Redis")
+        raise
+
+    # Test database connection
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1")
+            print("Connected to PostgreSQL")
+            cursor.close()
+    except Exception as e:
+        print("Failed to connect to PostgreSQL", e)
+        raise
+
+    # Fetch categories from databse
+    print("Fetching categories")
+    global CATEGORIES
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT DISTINCT category FROM wiki_articles")
+        CATEGORIES = cursor.fetchall()
+        CATEGORIES = [c[0] for c in CATEGORIES]
+        cursor.close()
+    print("Categories: ", CATEGORIES)
+
+    # Start background scheduler
+    scheduler.add_job(
+        evict_questions_from_db,
+        trigger=IntervalTrigger(minutes=DB_EVICT_PERIOD),
+        id="evict_questions",
+        replace_existing=False,
+    )
+    scheduler.add_job(
+        generate_questions_as_needed,
+        trigger=IntervalTrigger(minutes=GENERATE_CHECK_PERIOD),
+        next_run_time=datetime.datetime.now(), # run right away, then periodically
+        id="generate_questions",
+        replace_existing=False,
+    )
+    scheduler.start()
 
     yield
-    print("Shutting down")
 
-    await redis.aclose()
+    print("Shutting down")
+    db_conn_pool.closeall()
+    await redis_client.aclose()
+    scheduler.shutdown(wait=False)
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(
@@ -140,7 +292,7 @@ async def get_redis_batch(batch_req: GameBatchReq):
     return_qs = []
     for i in range(0, len(cached_results), 2):
         for q in cached_results[i]:
-            q = q.decode()
+            print(q)
             q = Question.parse_raw(q)
             return_qs.append(q)
 
@@ -157,33 +309,31 @@ async def get_redis_batch(batch_req: GameBatchReq):
 
     return return_qs, fwd_batch_req
 
-async def get_db_batch(batch_req: GameBatchReq):
+async def get_db_batch(batch_req: GameBatchReq, fetch_count: int = 10):
     print("CHECKING DB")
     user_id = batch_req.user_id
     queries = []
     params = []
     for elem in batch_req.batch:
         query = f"""
-            (SELECT *
-            FROM questions q
-            LEFT JOIN user_question_store uqs 
-                ON q.id = uqs.question_id 
+            (SELECT * FROM questions q
+            LEFT JOIN user_question_store uqs
+                ON q.id = uqs.question_id
                 AND uqs.user_id = %s
             WHERE uqs.question_id IS NULL
                 AND q.category = %s
             LIMIT %s)
         """
         queries.append(query)
-        params.extend([user_id, elem.category, elem.count])       
+        params.extend([user_id, elem.category, max(fetch_count, elem.count)])       
     query = " UNION ALL ".join(queries)
-    print("Query: ", query)
     
     questions = []
-    try:
-        conn = get_db_connection()
+    with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(query, params)
         questions = cursor.fetchall()
+
         print("Fetched questions: ", questions)
         questions = [Question(
             id=q[0],
@@ -197,6 +347,27 @@ async def get_db_batch(batch_req: GameBatchReq):
             downvotes=q[8]
         ) for q in questions]
 
+        # update usage count
+        placeholders = ",".join(["%s"] * len(questions))
+        query = f"""
+            UPDATE questions
+            SET usage_count = usage_count + 1
+            WHERE id IN ({placeholders})
+        """
+        params = [q.id for q in questions]
+        cursor.execute(query, params)
+
+        # update user_quesiton_store
+        placeholders = ",".join(["(%s, %s)"] * len(questions))
+        query = f"""
+            INSERT INTO user_question_store (user_id, question_id) VALUES 
+            {placeholders}
+        """
+        params = [ item for q in questions for item in (user_id, q.id) ]
+        cursor.execute(query, params)
+        conn.commit()
+        cursor.close()
+
         # split questions into return and excess
         return_qs = []
         excess_qs = []
@@ -207,7 +378,6 @@ async def get_db_batch(batch_req: GameBatchReq):
                 return_qs.append(q)
             else:
                 excess_qs.append(q)
-
         # cache excess questions
         print("Caching excess questions: ", excess_qs)
         async with redis_client.pipeline(transaction=True) as pipe:
@@ -216,18 +386,7 @@ async def get_db_batch(batch_req: GameBatchReq):
                 pipe.rpush(cache_key, q.json())
             await pipe.execute()
 
-        # return the questions
         return return_qs
-    except Exception as e:
-        print(e)
-        print({"error": "Failed to fetch questions"})
-        return []
-    finally:
-        try:
-            cursor.close()
-            conn.close()
-        except NameError:
-            pass
 
 @app.post("/getbatch/")
 async def serve_game_batch(batch_req: GameBatchReq):
@@ -254,16 +413,11 @@ async def downvote_questions(downvote_req: DownvoteBatchReq):
         SET downvote_count = downvote_count + 1
         WHERE id IN ({placeholders})"""
     
-    try:
-        conn = get_db_connection()
+    with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(query, downvote_req.batch)
         conn.commit()
         cursor.close()
-        conn.close()
-    except Exception as e:
-        print(e)
-        return {"error": "Failed to downvote questions"}
     return {"status": "success"}
 
 @app.get("/health")
