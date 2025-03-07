@@ -316,21 +316,13 @@ async def get_db_batch(batch_req: GameBatchReq, fetch_count: int = 10):
     params = []
     for elem in batch_req.batch:
         query = f"""
-            (WITH updated AS (
-                UPDATE questions
-                SET usage_count = usage_count + 1
-                WHERE id IN (
-                    SELECT q.id FROM questions q
-                    LEFT JOIN user_question_store uqs
-                        ON q.id = uqs.question_id 
-                        AND uqs.user_id = %s
-                    WHERE uqs.question_id IS NULL
-                        AND q.category = %s
-                    LIMIT %s
-                ) 
-                RETURNING *
-            )
-            SELECT * FROM updated)
+            (SELECT * FROM questions q
+            LEFT JOIN user_question_store uqs
+                ON q.id = uqs.question_id
+                AND uqs.user_id = %s
+            WHERE uqs.question_id IS NULL
+                AND q.category = %s
+            LIMIT %s)
         """
         queries.append(query)
         params.extend([user_id, elem.category, max(fetch_count, elem.count)])       
@@ -354,6 +346,16 @@ async def get_db_batch(batch_req: GameBatchReq, fetch_count: int = 10):
             usage_count=q[7],
             downvotes=q[8]
         ) for q in questions]
+
+        # update usage count
+        placeholders = ",".join(["%s"] * len(questions))
+        query = f"""
+            UPDATE questions
+            SET usage_count = usage_count + 1
+            WHERE id IN ({placeholders})
+        """
+        params = [q.id for q in questions]
+        cursor.execute(query, params)
 
         # update user_quesiton_store
         placeholders = ",".join(["(%s, %s)"] * len(questions))
