@@ -105,14 +105,14 @@ def main():
     
     # Write to CSV
     csv_path = os.path.join(output_dir, "wiki_articles.csv")
-    with open(csv_path, 'w', newline='') as csvfile:
+    with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=['title', 'category'])
         writer.writeheader()
         writer.writerows(all_articles)
     
     # Write to JSON
     json_path = os.path.join(output_dir, "wiki_articles.json")
-    with open(json_path, 'w') as jsonfile:
+    with open(json_path, 'w', encoding='utf-8') as jsonfile:
         json.dump(all_articles, jsonfile)
         
     print(f"Exported {len(all_articles)} articles to {csv_path} and {json_path}")
