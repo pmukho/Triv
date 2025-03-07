@@ -89,14 +89,6 @@ CREATE TABLE IF NOT EXISTS game_results (
     PRIMARY KEY (game_id)
 );
 
-CREATE TABLE IF NOT EXISTS questions_in_game (
-    question_id VARCHAR(255) REFERENCES questions(id),
-    question_number INT NOT NULL,
-    game_id VARCHAR(255) REFERENCES game_results(game_id),
-    PRIMARY KEY (game_id,question_number),
-    CHECK (question_number BETWEEN 1 AND 10)
-);
-
 INSERT INTO game_results (game_id, user_id, score, game_length) VALUES
 ('a', '1', 1, 10),
 ('b', '2', 2, 10),

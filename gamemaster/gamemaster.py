@@ -145,18 +145,9 @@ class GameMaster:
             INSERT INTO game_results (game_id,user_id, score,game_length,game_timestamp)
             VALUES (%s ,%s, %s, %s, NOW())
         """, (self.id, self.client_id, self.score, len(self.questions)))
-        for question_number,question in enumerate(self.questions):
-            cursor.execute("""
-                INSERT INTO questions_in_game (game_id, question_number,question_id)
-                VALUES (%s,%s, %s)
-            """, (self.id,question_number+1,question["id"]))
         conn.commit()
 
         # Test if the data was written
-        cursor.execute("SELECT * FROM questions_in_game WHERE game_id = '%s'", (self.id,))
-        questions = cursor.fetchall()
-        print("Inserted questions:", questions, flush=True)
-
         cursor.execute("SELECT * FROM game_results WHERE game_id = '%s'", (self.id,))
         results = cursor.fetchall()
         print("Inserted game results:", results, flush=True)
