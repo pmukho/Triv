@@ -9,7 +9,7 @@ This module includes a Dockerfile for running tests
    From the project root, run:
 
    ```bash
-   docker build -f gamemaster/Dockerfile.test -t gamemaster-tests .
+    docker build -f gamemaster/tests/Dockerfile -t gamemaster-tests .
    ```
 
 2. **Run the Tests**

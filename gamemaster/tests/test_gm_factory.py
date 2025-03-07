@@ -48,6 +48,8 @@ async def test_end_game_instance(clean_factory, monkeypatch):
     assert client_id in factory.game_masters
     # Skip downvoting
     monkeypatch.setattr(factory.game_masters[client_id], "notify_downvoted_questions", lambda: asyncio.sleep(0))
+    # Skip sending results
+    monkeypatch.setattr(factory.game_masters[client_id], "send_results", lambda: asyncio.sleep(0))
     # End the game
     await factory.end_game(client_id)
     # After ending, the game should be removed
