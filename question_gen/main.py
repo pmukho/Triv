@@ -4,6 +4,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
+import os
+import time
 
 # wiki_wiki = None
 # llm = None
@@ -47,11 +49,21 @@ app.add_middleware(
 def read_root():
     return {"Hello": "World"}
 
+DUMMY_MODE = os.getenv("DUMMY_MODE", None)
 @app.post("/questions")
 def read_questions(articles: Articles):
     questions = []
     ok = True
     error = ""
+
+    # FOR TESTING PURPOSES WITHOUT USING OPENAI OR WIKIPEDIA
+    if DUMMY_MODE:
+        for title in articles.article_names:
+            question = Question(prompt1="prompt1", prompt2="prompt2", prompt3="prompt3", answer=title)
+            questions.append(question)
+        time.sleep(len(articles.article_names) * 7) # Simulate a long wait time
+
+        return Questions(questions=questions, ok=ok, error=error)
     
     for article_name in articles.article_names:
         page = wiki_wiki.page(article_name)

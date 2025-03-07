@@ -8,7 +8,8 @@ from models import _GameBatchReqElem, GameBatchReq, Question, GameBatchResp, Dow
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.executors.pool import ThreadPoolExecutor
-import time
+import datetime
+import httpx
 
 # Database connection related settings
 db_name = os.environ.get("POSTGRES_DB")
@@ -45,11 +46,15 @@ redis_client = None
 executors = {
     "default": ThreadPoolExecutor(1)
 }
-scheduler = BackgroundScheduler(executors=executors)
+scheduler = BackgroundScheduler(
+    executors=executors,
+    job_defaults={"misfire_grace_time": 60},
+    timezone="UTC"
+)
 
 DOWNVOTE_THRESHOLD = os.environ.get("DOWNVOTE_THRESHOLD", 3)
 USAGE_THRESHOLD = os.environ.get("USAGE_THRESHOLD", 5)
-DB_EVICT_PERIOD = os.environ.get("DB_EVICT_PERIOD", 5)
+DB_EVICT_PERIOD = os.environ.get("DB_EVICT_PERIOD", 5) # in minutes
 def evict_questions_from_db():
     print("Checking for questions to evict")
 
@@ -57,7 +62,10 @@ def evict_questions_from_db():
         cursor = conn.cursor()
         query = """
             DELETE FROM questions
-            WHERE usage_count >= %s OR downvote_count >= %s
+            WHERE 
+                usage_count >= %s OR 
+                downvote_count >= %s OR
+                created_at < NOW() - Interval '2 days';
         """
         cursor.execute(query, (USAGE_THRESHOLD, DOWNVOTE_THRESHOLD))
         conn.commit()
@@ -67,7 +75,7 @@ CATEGORIES = [] # set by lifespan start
 MIN_THRESHOLD_FACTOR = os.environ.get("MIN_THRESHOLD_FACTOR", 0.1)
 PROACTIVE_FETCH_COUNT = os.environ.get("PROACTIVE_FETCH_COUNT", 5)
 QGEN_BATCH_SIZE = os.environ.get("QGEN_BATCH_SIZE", 10)
-GENERATE_CHECK_PERIOD = os.environ.get("GENERATE_CHECK_PERIOD", 5)
+GENERATE_CHECK_PERIOD = os.environ.get("GENERATE_CHECK_PERIOD", 5) # in minutes
 def generate_questions_as_needed():
     print("Checking counts per category")
 
@@ -108,6 +116,7 @@ def generate_questions_as_needed():
             min_threshold = max(int(MIN_THRESHOLD_FACTOR * a_count), 1)
             q_count = question_counts.get(cat, 0)
             if q_count < min_threshold:
+                print(f"Category {cat} needs more questions: {q_count} < {min_threshold}")
                 query = """
                     SELECT title FROM wiki_articles
                     WHERE 
@@ -119,8 +128,8 @@ def generate_questions_as_needed():
 
                 cursor.execute(query, (cat, PROACTIVE_FETCH_COUNT))
                 articles = cursor.fetchall()
-                print(articles)
-                fetch_batch.extend([(cat, a) for a in articles])
+                articles = [a[0] for a in articles]
+                fetch_batch.extend([(title, cat) for title in articles])
     
     # Fetch questions for articles
     for i in range(0, len(fetch_batch), QGEN_BATCH_SIZE):
@@ -130,12 +139,62 @@ def generate_questions_as_needed():
             fetch_and_store_questions,
             args=(batch,),
             replace_existing=False,
+            misfire_grace_time=None, # will run eventually
         )
 
-def fetch_and_store_questions(category_title_batch):
+def fetch_and_store_questions(title_category_batch):
     print("Fetching questions for articles")
-    print(category_title_batch)
-    time.sleep(20)
+    print(title_category_batch)
+    titles = [t[0] for t in title_category_batch]
+    categories = [t[1] for t in title_category_batch]
+    payload = {
+        "article_names": titles,
+    }
+
+    # using synchronous client to avoid overloading question-gen
+    questions = []
+    with httpx.Client(timeout=httpx.Timeout(120.0, connect=10.0)) as client:
+        try:
+            response = client.post("http://question-gen:8000/questions", json=payload)
+            response.raise_for_status()
+            questions = response.json()["questions"]
+            print("Fetched questions: ", questions)
+        except Exception as e:
+            print("Error fetching questions: ", e)
+            return
+        
+    # Store questions in database
+    with get_db_connection() as conn, conn.cursor() as cursor:
+        placeholders = ",".join(["(%s, %s, %s, %s, %s, %s)"] * len(questions))
+        query = f"""
+            INSERT INTO questions (id, category, hint1, hint2, hint3, answer) VALUES
+            {placeholders}
+            """
+        params = []
+        for i in range(len(questions)):
+            q = questions[i]
+            title = titles[i]
+            category = categories[i]
+            params.extend([
+                title,
+                category,
+                q["prompt1"],
+                q["prompt2"],
+                q["prompt3"],
+                q["answer"]
+            ])
+        cursor.execute(query, params)
+        conn.commit()
+
+        # Update last_used for articles
+        placeholders = ",".join(["%s"] * len(titles))
+        query = f"""
+            UPDATE wiki_articles
+            SET last_used = NOW()
+            WHERE title IN ({placeholders});
+        """
+        cursor.execute(query, titles)
+        conn.commit()
 
 # FastAPI app
 @asynccontextmanager
@@ -191,6 +250,7 @@ async def lifespan(app):
     scheduler.add_job(
         generate_questions_as_needed,
         trigger=IntervalTrigger(minutes=GENERATE_CHECK_PERIOD),
+        next_run_time=datetime.datetime.now(), # run right away, then periodically
         id="generate_questions",
         replace_existing=False,
     )

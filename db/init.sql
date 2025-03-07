@@ -72,7 +72,7 @@ INSERT INTO user_question_store (user_id, question_id) VALUES
 CREATE TABLE IF NOT EXISTS wiki_articles (
     title TEXT NOT NULL,
     category TEXT NOT NULL,
-    last_used TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_used TIMESTAMP DEFAULT NULL,
     PRIMARY KEY (title, category)
 );
 
