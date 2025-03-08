@@ -6,14 +6,20 @@ from contextlib import asynccontextmanager
 from os import environ
 from pydantic import BaseModel
 
-# wiki_wiki = None
-# llm = None
-
 # wiki_wiki = wikipediaapi.Wikipedia(user_agent= 'SWEats (njwei@g.ucla.edu)', language='en')
 # llm = OpenAI()
 
 wiki_wiki = None
 llm = None
+
+tags_metadata = [
+    {
+        "name": "questions",
+        "description": "Get a NAQT style trivia given an article title from the cache.\
+            If OPENAI_USER_AGENT is set to 'DUMMY', the response will be a dummy response\
+                instead of calling the chatbot."
+    }
+]
 
 class Articles(BaseModel):
     article_names: list[str]
@@ -38,7 +44,7 @@ async def lifespan(app: FastAPI):
     llm = OpenAI()
     yield
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=lifespan, openapi_tags=tags_metadata)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost"],
@@ -51,7 +57,7 @@ def read_root():
     return {"Hello": "World"}
 
 
-@app.post("/questions")
+@app.post("/questions", tags=['questions'])
 def read_questions(articles: Articles):
     questions = []
     ok = True
@@ -73,11 +79,17 @@ def read_questions(articles: Articles):
 
         # prompt += "\n The first clue should be prefaced with '*|*', the second with '*|*', and the third with *|*.'. The answer should be prefaced with '*|*'."
 
+        if environ['OPENAI_USER_AGENT'] == 'DUMMY':
+            question = Question(prompt1="1. Clue 1", prompt2="2. Clue 2", prompt3="3. Clue 3", answer="ANSWER: Answer")
+            print(f"Dummy question for article {article_name}", flush=True)
+            questions.append(question)
+            continue
+
         while True:
             try: 
                 completion = llm.chat.completions.create(
-                    # model="gpt-4o",
-                    model="gpt-4.5-preview",
+                    model="gpt-4o",
+                    # model="gpt-4.5-preview",
                     messages=[
                         {"role": "developer", "content": "You are a helpful assistant."},
                         {
@@ -86,8 +98,8 @@ def read_questions(articles: Articles):
                         }
                     ]
                 )
-                # print(completion.choices[0].message)
-                print(completion.choices[0].message.content)
+                # print(completion.choices[0].message, flush=True)
+                print(completion.choices[0].message.content, flush=True)
                 content = completion.choices[0].message.content
 
                 prompt1 = content.split("1.")[1].split("\n2.")[0].strip()
@@ -100,7 +112,7 @@ def read_questions(articles: Articles):
                     questions.append(question)
                     break
                 else:
-                    print(f"Invalid completion for article {article_name}. Trying again.")
+                    print(f"Invalid completion for article {article_name}. Trying again.", flush=True)
             
             except RateLimitError as e:
                 if e.type == 'insufficient_quota':
@@ -108,7 +120,7 @@ def read_questions(articles: Articles):
                     ok = False
                     break
                 else:
-                    print("Rate limit error. Trying again.")
+                    print("Rate limit error. Trying again.", flush=True)
 
         if not ok:
             break
@@ -116,4 +128,6 @@ def read_questions(articles: Articles):
 
 @app.get("/health")
 def health_check():
+    if environ['OPENAI_USER_AGENT'] == 'DUMMY':
+        return {"status": "healthy", "message": "Dummy mode is enabled."}
     return {"status": "healthy"}
