@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager, contextmanager
 import redis.asyncio as redis
@@ -271,19 +271,12 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    return await log_request_middleware(request, call_next)
-
 @app.get("/")
 async def read_root():
     return {"message": "Deployment of Cache with FastAPI"}
 
 async def get_redis_batch(batch_req: GameBatchReq):
-    logger.info("CHECKING CACHE")
-
-    # print("CHECKING CACHE")
+    print("CHECKING CACHE")
     user_id = batch_req.user_id
     async with redis_client.pipeline(transaction=True) as pipe:
         for elem in batch_req.batch:
@@ -292,9 +285,7 @@ async def get_redis_batch(batch_req: GameBatchReq):
             pipe.lrange(cache_key, 0, count-1)
             pipe.ltrim(cache_key, count, -1) # remove the unseen questions from cache
         cached_results = await pipe.execute()
-    # print(f"Cached results: {cached_results}")
-    logger.debug(f"Cached results: {cached_results}")
-
+    print(f"Cached results: {cached_results}")
 
     # see how many questions we need to fetch from db
     counts = {elem.category: elem.count for elem in batch_req.batch}
@@ -388,8 +379,7 @@ async def get_db_batch(batch_req: GameBatchReq, fetch_count: int = 10):
             else:
                 excess_qs.append(q)
         # cache excess questions
-        logger.info(f"Caching excess questions: {excess_qs}")
-        # print("Caching excess questions: ", excess_qs)
+        print("Caching excess questions: ", excess_qs)
         async with redis_client.pipeline(transaction=True) as pipe:
             for q in excess_qs:
                 cache_key = f"unseen:{user_id}:{q.category}"
@@ -406,7 +396,6 @@ async def serve_game_batch(batch_req: GameBatchReq):
     cached_qs, fwd_req = await get_redis_batch(batch_req)
     print("FWD REQ: ", fwd_req)
     if len(fwd_req.batch) == 0:
-        logger.info("All questions found in cache")
         return GameBatchResp(batch=cached_qs)
 
     db_results = await get_db_batch(fwd_req)
