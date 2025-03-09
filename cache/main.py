@@ -407,6 +407,9 @@ async def serve_game_batch(batch_req: GameBatchReq):
 async def downvote_questions(downvote_req: DownvoteBatchReq):
     # update database records
     print("Downvoting questions: ", downvote_req)
+    if len(downvote_req.batch) == 0:
+        return {"status": "success"}
+
     placeholders = ",".join(["%s"] * len(downvote_req.batch))
     query = f"""
         UPDATE questions
