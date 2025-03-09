@@ -7,6 +7,7 @@ Table questions {
   answer text
   created_at timestamp [default: `CURRENT_TIMESTAMP`]
   usage_count int [default: 0]
+  downvote_count int [default: 0]
 }
 
 Table users {
@@ -18,6 +19,22 @@ Table user_question_store {
   user_id varchar(255)
   question_id varchar(255)
   PRIMARY KEY (user_id, question_id)
+}
+
+Table wiki_articles {
+  title varchar(255)
+  category varchar(255)
+  last_used timestamp [default: NULL]
+  PRIMARY KEY (title, category)
+}
+
+Table game_results {
+  game_id varchar(255)
+  user_id varchar(255)
+  score int [default: 0]
+  game_timestamp timestamp [default: 'CURRENT_TIMESTAMP']
+  game_length int [default: 0]
+  PRIMARY KEY (game_id)
 }
 
 Ref: user_question_store.user_id > users.id
