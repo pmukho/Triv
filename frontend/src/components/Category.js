@@ -32,7 +32,17 @@ const CategoryPage = () => {
     };
 
     const handleSubmit = () => {
+        const categorySelection = categories.reduce((acc, category, index) => {
+            acc[category] = values[index];
+            return acc;
+        }, {});
+        
+        localStorage.setItem("categorySelection", JSON.stringify(categorySelection)); // Store values in localStorage
         navigate("/"); // Redirect to Login.js
+    };
+
+    const handleReset = () => {
+        setValues(Array(10).fill(0)); // Reset all sliders to 0
     };
 
     return (
@@ -62,8 +72,14 @@ const CategoryPage = () => {
                     ))}
                 </div>
                 
-                {/* Submit Button Centered at the Bottom */}
-                <div className="w-full flex justify-center mt-4">
+                {/* Buttons Centered at the Bottom */}
+                <div className="w-full flex justify-center mt-4 gap-4">
+                    <button
+                        onClick={handleReset}
+                        className="w-1/3 bg-gray-500 text-white py-2 rounded-md font-bold hover:bg-gray-600 transition"
+                    >
+                        Reset All
+                    </button>
                     <button
                         onClick={handleSubmit}
                         className="w-1/3 bg-blue-500 text-white py-2 rounded-md font-bold hover:bg-blue-600 transition"
