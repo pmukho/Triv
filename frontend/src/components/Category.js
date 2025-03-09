@@ -36,9 +36,9 @@ const CategoryPage = () => {
             acc[category] = values[index];
             return acc;
         }, {});
-        
+    
         localStorage.setItem("categorySelection", JSON.stringify(categorySelection)); // Store values in localStorage
-        navigate("/"); // Redirect to Login.js
+        navigate("/quiz"); // Redirect to Quiz Page instead of Login
     };
 
     const handleReset = () => {
