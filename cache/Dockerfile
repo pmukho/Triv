@@ -8,6 +8,7 @@ RUN pip install -r requirements.txt --no-cache-dir
 COPY utils/ /app/utils/
 
 COPY cache/main.py .
+COPY cache/models.py .
 COPY cache/tests/ ./tests/
 
 # Install curl
