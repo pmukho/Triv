@@ -1,7 +1,26 @@
 from gamemaster import GameMaster
 
-# GmFacroty class to manage GameMaster instances
+
 class GmFactory:
+    """
+    A factory class to manage the creation and lifecycle of GameMaster instances.
+    
+    Attributes
+    ----------
+    game_masters : dict
+        A dictionary to store active GameMaster instances with client_id as key.
+    game_master_number : int
+        A counter to assign unique identifiers to GameMaster instances.
+        
+    Methods
+    -------
+    get_or_create_game_master(client_id: int, max_questions: int) -> int
+        Retrieves an existing GameMaster instance or creates a new one if it doesn't exist.
+    end_game(client_id: int) -> int
+        Ends the game for a given client_id, notifies downvoted questions, and sends results.
+        Deletes the GameMaster instance from the dictionary.
+        Returns the unique identifier of the ended GameMaster instance.
+    """
     def __init__(self):
         self.game_masters = {}
         # Initialize the game_master_number to 0, could cause issues with too many game masters

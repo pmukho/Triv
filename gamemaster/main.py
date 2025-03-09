@@ -7,6 +7,20 @@ import psycopg2
 import os
 from pydantic import BaseModel
 
+tags_metadata = [
+    {
+        "name": "health",
+        "description": "Health check for the API"
+    },
+    {
+        "name": "leaderboard",
+        "description": "Get the leaderboard for the game"
+    },
+    {
+        "name": "login",
+        "description": "Login to the game"
+    }
+]
 
 app = FastAPI()
 app.add_middleware(
@@ -30,6 +44,25 @@ def get_db_connection():
 
 
 class ConnectionManager:
+    """
+    A class to manage websocket connections for clients.
+
+    Attributes
+    ----------
+    active_connections : dict
+        A dictionary to store active websocket connections with client_id as key.
+
+    Methods
+    -------
+    connect(client_id: int, websocket: WebSocket)
+        Accepts a new websocket connection and adds it to the active connections.
+    disconnect(client_id: int)
+        Removes a websocket connection from the active connections.
+    send_message(client_id: int, message: dict)
+        Sends a message to a specific client.
+    broadcast(message: dict)
+        Sends a message to all connected clients.
+    """
     def __init__(self):
         self.active_connections: dict[int, WebSocket] = {}
 
@@ -60,6 +93,20 @@ manager = ConnectionManager()
 hint_tasks = {}
 @app.websocket("/ws/quiz/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: int):
+    """
+    WebSocket endpoint for handling quiz game interactions.
+
+    Expects messages from client including "start_question", "submit_answer", "end_game", and "downvote_question".
+    Handles sending hints and receiving answers from the client.
+
+    Parameters
+    ----------
+    websocket : WebSocket
+        The WebSocket connection object.
+
+    client_id : int
+        The unique identifier for the client.
+    """
     # Connect the client
     await manager.connect(client_id, websocket)
     
@@ -125,6 +172,16 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
         await websocket.close()
 
 async def send_hints_timed(game_master, client_id: int):
+    """
+    Sends hints to the client at timed intervals.
+    
+    Parameters
+    ----------
+    game_master : GameMaster
+        The game master instance managing the game state.
+    client_id : int
+        The unique identifier for the client.
+    """
     try:
         # Fetch hints
         while True:
@@ -167,7 +224,20 @@ class LoginData(BaseModel):
     username: str
     client_id: str
 @app.post('/ws/login')
-async def login(data: LoginData):
+async def login(data: LoginData, tags=["login"]):
+    """
+    Login endpoint for the game.
+
+    Parameters
+    ----------
+    data : LoginData
+        The login data containing the username and client_id.
+
+    Returns
+    -------
+    dict
+        A dictionary containing the login status and message.
+    """
     print(f"Logging in user {data.username} with client_id {data.client_id},", flush=True) 
     try:
         conn = get_db_connection()
@@ -200,7 +270,15 @@ async def login(data: LoginData):
 
 
 @app.get('/ws/leaderboard/get_leaderboard')
-async def get_leaderboard():
+async def get_leaderboard(tags=["leaderboard"]):
+    """
+    Get the leaderboard for the game.
+
+    Returns
+    -------
+    dict
+        A dictionary containing the leaderboard data.
+    """
     try:
         print("Getting leaderboard", flush=True)
         conn = get_db_connection()

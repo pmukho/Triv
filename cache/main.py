@@ -11,6 +11,21 @@ from apscheduler.executors.pool import ThreadPoolExecutor
 import datetime
 import httpx
 
+tags_metadata = [
+    {
+        "name": "getbatch",
+        "description": "Serve a batch of questions to the game master given the counts for each category",
+    },
+    {
+        "name": "downvote",
+        "description": "Downvote a batch of questions",
+    },
+    {
+        "name": "health",
+        "description": "Health check for the service",
+    },
+]
+
 # Database connection related settings
 db_name = os.environ.get("POSTGRES_DB")
 db_user = os.environ.get("POSTGRES_USER")
@@ -30,6 +45,15 @@ db_conn_pool = pool.ThreadedConnectionPool(
 )
 @contextmanager
 def get_db_connection():
+    """Context manager for database connection.
+
+
+    Returns
+    -------
+    conn : psycopg2.extensions.connection
+        A database connection object.
+    """
+
     conn = db_conn_pool.getconn()
     try:
         yield conn
@@ -56,6 +80,10 @@ DOWNVOTE_THRESHOLD = os.environ.get("DOWNVOTE_THRESHOLD", 3)
 USAGE_THRESHOLD = os.environ.get("USAGE_THRESHOLD", 5)
 DB_EVICT_PERIOD = os.environ.get("DB_EVICT_PERIOD", 5) # in minutes
 def evict_questions_from_db():
+    """
+    Evict questions from the database based on usage count and downvote count.
+    """
+
     print("Checking for questions to evict")
 
     with get_db_connection() as conn:
@@ -143,6 +171,15 @@ def generate_questions_as_needed():
         )
 
 def fetch_and_store_questions(title_category_batch):
+    """
+    Fetch questions for a batch of articles and store them in the database.
+
+    Parameters
+    ----------
+    title_category_batch : list of tuples"
+        A list of tuples containing the article title (str) and category (str).
+        e.g. [(title1, category1), (title2, category2), ...]
+    """ 
     print("Fetching questions for articles")
     print(title_category_batch)
     titles = [t[0] for t in title_category_batch]
@@ -199,6 +236,13 @@ def fetch_and_store_questions(title_category_batch):
 # FastAPI app
 @asynccontextmanager
 async def lifespan(app):
+    """
+    Lifespan context manager for the FastAPI app.
+
+    This function is called when the app starts up and shuts down.
+    It initializes the Redis client, database connection pool, and
+    starts the background scheduler.
+    """
     print("Starting up")
 
     # Initialize Redis client (no need to manage connection pool)
@@ -263,7 +307,7 @@ async def lifespan(app):
     await redis_client.aclose()
     scheduler.shutdown(wait=False)
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=lifespan, openapi_tags=tags_metadata)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost"],
@@ -276,6 +320,14 @@ async def read_root():
     return {"message": "Deployment of Cache with FastAPI"}
 
 async def get_redis_batch(batch_req: GameBatchReq):
+    """
+    Check Redis cache for unseen questions for the user.
+    
+    Parameters
+    ----------
+    batch_req : GameBatchReq
+        The batch request containing user_id and batch of categories and counts.
+    """
     print("CHECKING CACHE")
     user_id = batch_req.user_id
     async with redis_client.pipeline(transaction=True) as pipe:
@@ -310,6 +362,16 @@ async def get_redis_batch(batch_req: GameBatchReq):
     return return_qs, fwd_batch_req
 
 async def get_db_batch(batch_req: GameBatchReq, fetch_count: int = 10):
+    """
+    Fetch a batch of questions from the database.
+
+    Parameters
+    ----------
+    batch_req : GameBatchReq
+        The batch request containing user_id and batch of categories and counts.
+    fetch_count : int, optional
+        The number of questions to fetch for each category, by default 10.
+    """
     print("CHECKING DB")
     user_id = batch_req.user_id
     queries = []
@@ -388,10 +450,23 @@ async def get_db_batch(batch_req: GameBatchReq, fetch_count: int = 10):
 
         return return_qs
 
-@app.post("/getbatch/")
-async def serve_game_batch(batch_req: GameBatchReq):
-    # check cache for unseen q's for client
-    # if none, get new batch from db
+@app.post("/getbatch/", tags=["getbatch"])
+async def serve_game_batch(batch_req: GameBatchReq) -> GameBatchResp:
+    """
+    Serve a batch of questions to the game master given the counts for each category.
+
+    Parameters
+    ----------
+    batch_req : GameBatchReq
+
+        The batch request containing user_id and batch of categories and counts.
+        Should be part of payload for request, not query params.
+    Returns
+    -------
+    GameBatchResp: GameBatchResp
+
+        The response containing the batch of questions.
+    """
 
     cached_qs, fwd_req = await get_redis_batch(batch_req)
     print("FWD REQ: ", fwd_req)
@@ -403,8 +478,18 @@ async def serve_game_batch(batch_req: GameBatchReq):
     print("CACHED QS: ", cached_qs)
     return GameBatchResp(batch=cached_qs + db_results)
 
-@app.post("/downvote/")
+@app.post("/downvote/", tags=["downvote"])
 async def downvote_questions(downvote_req: DownvoteBatchReq):
+    """
+    Downvote a batch of questions.
+    
+    Parameters
+    ----------
+    downvote_req : DownvoteBatchReq
+    
+        The batch request containing user_id and batch of question ids.
+        Should be part of payload for request, not query params.
+    """
     # update database records
     print("Downvoting questions: ", downvote_req)
     placeholders = ",".join(["%s"] * len(downvote_req.batch))
@@ -420,6 +505,9 @@ async def downvote_questions(downvote_req: DownvoteBatchReq):
         cursor.close()
     return {"status": "success"}
 
-@app.get("/health")
+@app.get("/health", tags=["health"])
 def health_check():
+    """
+    Health check for the service.
+    """
     return {"status": "healthy"}
