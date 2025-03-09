@@ -1,57 +1,22 @@
-// src/components/Login.js
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+// Updated Login.js
+import { useGoogleLogin } from '@react-oauth/google';
+import { useNavigate } from 'react-router-dom';
 import ParticlesBackground from './ParticlesBackground';
-import { GoogleLogin } from '@react-oauth/google';
-import { jwtDecode } from "jwt-decode";
-
-const sendLogin = async (clientId, userName) => {
-    try {
-        console.log('Sending login request with username:', userName, 'and client ID:', clientId);
-        const res = await fetch(`/ws/login`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ username: userName, client_id: clientId }),
-        });
-        const data = await res.json();
-        console.log("Data:", data);
-        return data; // Return the API response
-    } catch (error) {
-        console.log('Error:', error);
-        return { error: "An error occurred while submitting the answer." };
-    }
-};
+import { useState } from 'react';
 
 const Login = () => {
-    const [name, setName] = useState("");
-    const [email, setEmail] = useState("");
     const navigate = useNavigate();
+    const [name, setName] = useState("");
 
-    const handleError = () => {
-        console.log('Login Failed');
-        // Handle login error
+    const handleSuccess = async (tokenResponse) => {
+        console.log("Google Login Success:", tokenResponse);
+        navigate('/quiz', { state: { maxQuestions: 5 } });
     };
 
-    const handleSuccess = async (credentialResponse) => {
-        // Store user info in localStorage or state management
-        const decoded = jwtDecode(credentialResponse.credential);
-        const email = decoded.email;
-        const userId = decoded.sub;
-        console.log('Login Success:', name, email, userId);
-        localStorage.setItem('userName', name);
-        localStorage.setItem('id', userId);
-        const response = await sendLogin(userId, name);
-        console.log('Response:', response);
-        navigate("/quiz", { state: { maxQuestions : 5 }}); 
-    };
-
-    const handleSubmit = (e) => {
-        // You can add validation here if needed
-        // For now, we'll just call handleSuccess with a mock credentialResponse
-        //handleSuccess({ clientId: 'mockClientId' });
-    };
+    const login = useGoogleLogin({
+        onSuccess: handleSuccess,
+        onError: () => console.log('Login Failed'),
+    });
 
     return (
         <div className="relative min-h-screen">
@@ -61,41 +26,41 @@ const Login = () => {
                     <div className="w-full md:w-1/2 bg-blue-500 text-white p-12 flex flex-col justify-center">
                         <h2 className="text-5xl font-bold mb-8">Rules</h2>
                         <p className="text-lg leading-relaxed">
-                            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec sit amet lacus viverra.
+                            Lorem ipsum dolor sit amet, consectetur adipiscing elit.
                         </p>
                     </div>
-                    <div className="w-full md:w-1/2 p-12">
-                        <h2 className="text-4xl font-bold text-center mb-10">TRIVIA GAME</h2>
-                        <form className="space-y-6" onSubmit={handleSubmit}>
-                            <input 
-                                type="text" 
-                                placeholder="Name" 
-                                value={name} 
-                                onChange={(e) => setName(e.target.value)} 
-                                className="w-full p-4 text-xl border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                required
+                    <div className="w-full md:w-1/2 p-12 flex flex-col space-y-4">
+                        <h2 className="text-4xl font-bold text-center mb-6">TRIVIA GAME</h2>
+                        <input 
+                            type="text" 
+                            placeholder="Name" 
+                            value={name} 
+                            onChange={(e) => setName(e.target.value)} 
+                            className="w-full p-3 text-lg border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                            required
+                        />
+                        <button 
+                            onClick={() => login()} 
+                            className="w-full bg-[#4285F4] text-white py-3 text-lg rounded-md font-bold hover:bg-blue-700 transition flex justify-center items-center"
+                        >
+                            <img
+                                src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Google_%22G%22_Logo.svg/512px-Google_%22G%22_Logo.svg.png"
+                                alt="Google Logo"
+                                className="w-6 h-6 mr-2"
                             />
-                            {/* <input 
-                                type="email" 
-                                placeholder="Email" 
-                                value={email} 
-                                onChange={(e) => setEmail(e.target.value)} 
-                                className="w-full p-4 text-xl border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                required
-                            /> */}
-                            <GoogleLogin onSuccess={handleSuccess} onError={handleError} />
-                            {/* <button 
-                                type="submit"
-                                className="w-full bg-blue-500 text-white py-4 text-xl rounded-md font-bold hover:bg-blue-600 transition"
-                            >
-                                Submit
-                            </button> */}
-                        </form>
+                            Sign in with Google
+                        </button>
                         <button 
                             onClick={() => navigate("/leaderboard")} 
-                            className="w-full mt-6 bg-orange-500 text-white py-4 text-xl rounded-md font-bold hover:bg-orange-600 transition"
+                            className="w-full bg-orange-500 text-white py-3 text-lg rounded-md font-bold hover:bg-orange-600 transition"
                         >
                             Leaderboard
+                        </button>
+                        <button 
+                            onClick={() => navigate("/category")} 
+                            className="w-full bg-green-500 text-white py-3 text-lg rounded-md font-bold hover:bg-green-600 transition"
+                        >
+                            Categories
                         </button>
                     </div>
                 </div>
