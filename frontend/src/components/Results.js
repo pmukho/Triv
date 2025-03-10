@@ -56,12 +56,12 @@ const Results = () => {
                             >
                             View Category Results
                             </button>
-                            <button 
+                            {/* <button 
                                 onClick={() => navigate("/gamehistory")}
                                 className="w-full bg-orange-500 text-white py-4 text-xl rounded-lg font-bold hover:bg-orange-600 transition-colors duration-300"
                             >
                                 Check Your Game History
-                            </button>
+                            </button> */}
                         </div>
                     </div>
                 </div>

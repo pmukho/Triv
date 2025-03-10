@@ -33,17 +33,29 @@ class GameMaster:
         self.max_questions = max_questions
         self.downvoted_questions = []
 
-    async def load_questions(self):
+    async def load_questions(self, categorySelect):
         # Load batch from cache
         if self.questions:
             return
 
         # Prepare payload
-        payload = {
-            "user_id": str(self.client_id),
-            "batch_size": 2,
-            "batch": [{"category": "CAT1", "count": 3}, {"category": "CAT2", "count": 3}]
-        }
+        payload = None
+        if categorySelect == {}:
+            payload = {
+                "user_id": str(self.client_id),
+                "batch_size": 2,
+                "batch": [{"category": "CAT1", "count": 3}, {"category": "CAT2", "count": 3}]
+            }
+        else:
+            payload["user_id"] = str(self.client_id)
+            payload["batch"] = []
+            for cat, count in categorySelect.items():
+                if count > 0:
+                    payload["batch"].append({"category": cat, "count": count})
+            payload["batch_size"] = len(payload["batch"])
+
+        print("Payload for loading questions:", payload)
+
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(f"{CACHE_SERVICE_URL}/getbatch/", json=payload)
@@ -56,9 +68,9 @@ class GameMaster:
                 print("Error loading questions:", e)
                 self.questions = []
 
-    async def get_hints(self):
+    async def get_hints(self, categorySelect):
         # Implement logic to get the next hints
-        await self.load_questions()
+        await self.load_questions(categorySelect)
         if self.current_question < len(self.questions):
             q = self.questions[self.current_question]
             hints = [q["hint1"], q["hint2"], q["hint3"]]

@@ -74,7 +74,7 @@ const Login = () => {
                             required
                         />
                         <GoogleLogin onSuccess={handleSuccess} onError={handleError} />
-                        <button 
+                        {/* <button 
                             onClick={() => navigate("/leaderboard")} 
                             className="w-full bg-orange-500 text-white py-3 text-lg rounded-md font-bold hover:bg-orange-600 transition"
                         >
@@ -85,7 +85,7 @@ const Login = () => {
                             className="w-full bg-green-500 text-white py-3 text-lg rounded-md font-bold hover:bg-green-600 transition"
                         >
                             Categories
-                        </button>
+                        </button> */}
                     </div>
                 </div>
             </div>

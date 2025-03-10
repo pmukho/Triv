@@ -17,7 +17,7 @@ db_user = os.environ.get("POSTGRES_USER")
 db_password = os.environ.get("POSTGRES_PASSWORD")
 db_host = "postgres-db"
 db_port = "5432"
-MAX_DB_CONNECTIONS = 5
+MAX_DB_CONNECTIONS = 20
 MIN_DB_CONNECTIONS = 1
 
 db_conn_pool = pool.ThreadedConnectionPool(

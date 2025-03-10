@@ -125,13 +125,15 @@ const Quiz = () => {
   // WebSocket connection management
   useEffect(() => {
     const id = localStorage.getItem('id');
+    const categoryDist = localStorage.getItem('categorySelection');
     const wsUrl = `/ws/quiz/${id}?${maxQuestions}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
       console.log('WebSocket connected4');
-      sendMessage('start_question', {});
+      console.log(categoryDist)
+      sendMessage('start_question', categoryDist);
     };
 
     ws.onmessage = (event) => {

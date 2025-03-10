@@ -32,6 +32,10 @@ INSERT INTO questions (id, category, hint1, hint2, hint3, answer) VALUES
 ('19', 'CAT2', 'h1', 'h2', 'h3', 'ans'),
 ('20', 'CAT2', 'h1', 'h2', 'h3', 'ans');
 
+COPY questions(hint1, hint2, hint3, answer, category, id)
+FROM '/docker-entrypoint-initdb.d/data/questions.csv'
+DELIMITER ',' CSV HEADER;
+
 UPDATE questions SET usage_count = 10 WHERE id = '1';
 UPDATE questions SET downvote_count = 5 WHERE id = '2';
 

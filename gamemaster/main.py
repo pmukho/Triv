@@ -64,7 +64,6 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
     await manager.connect(client_id, websocket)
     
     max_questions = int(websocket.query_params.get("max_questions", 5))
-
     gm_key = gmFactory.get_or_create_game_master(client_id, max_questions)
     gm = gmFactory.game_masters[gm_key]
 
@@ -82,7 +81,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
                     hint_tasks[client_id].cancel()
 
                 # Send hints as a background task
-                task = asyncio.create_task(send_hints_timed(gm, client_id))
+                task = asyncio.create_task(send_hints_timed(gm, client_id, categorySelect=payload))
                 hint_tasks[client_id] = task
                 
                 await manager.send_message(client_id, {
@@ -126,11 +125,11 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
         print(f"Error in WebSocket communication with client {client_id}: {e}")
         await websocket.close()
 
-async def send_hints_timed(game_master, client_id: int):
+async def send_hints_timed(game_master, client_id: int, categorySelect):
     try:
         # Fetch hints
         while True:
-            hints, has_question = await game_master.get_hints()
+            hints, has_question = await game_master.get_hints(categorySelect)
             if has_question and len(hints) >= 3:
                 break
 
