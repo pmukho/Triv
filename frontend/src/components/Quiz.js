@@ -33,6 +33,7 @@ const Quiz = () => {
   const [panels, setPanels] = useState(DEFAULT_PANELS);
   const [loadingHints, setLoadingHints] = useState(true);
   const [score, setScore] = useState(0);
+  const [hintCount, setHintCount] = useState(0);
 
   const maxQuestions = location.state?.maxQuestions || 5;
   const [currentQuestion, setCurrentQuestion] = useState({
@@ -55,6 +56,7 @@ const Quiz = () => {
 
   // Update panels with a new hint
   const handleNewHint = useCallback((hint) => {
+    setHintCount((prev) => prev + 1);
     setPanels((prev) => {
       const placeholderEntry = Object.entries(prev).find(
         ([, panel]) => panel.content === 'Loading...'
@@ -155,7 +157,7 @@ const Quiz = () => {
 
     // If user time is up but not revealed, automatically submit blank
     if (timeLeft <= 0 && !answerRevealed) {
-      sendMessage('submit_answer', {});
+      sendMessage('submit_answer', {"answer": answer, "hintCount": hintCount});
       return;
     }
 
@@ -185,6 +187,7 @@ const Quiz = () => {
   // Move to the next question or navigate to results if done
   const handleNextQuestion = useCallback(() => {
     setAnswer('');
+    setHintCount(0);
 
     setAnswerRevealed(false);
     setCorrectAnswer('');
@@ -206,13 +209,13 @@ const Quiz = () => {
     setTimeLeft(30);
     setPanels(DEFAULT_PANELS);
     sendMessage('start_question', {});
-  }, [navigate]);
+  }, [navigate, sendMessage, setHintCount]);
   
 
   // Handle answer form submission
   const handleSubmit = (e) => {
     e.preventDefault();
-    sendMessage('submit_answer', { answer });
+    sendMessage('submit_answer', {"answer": answer, "hintCount": hintCount});
   };
 
   // Downvote question

@@ -91,7 +91,9 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
                 })
             elif msg_type == "submit_answer":
                 user_answer = payload.get("answer", "")
-                is_correct, score, answer, hints = await gm.check_answer(user_answer)
+                hintsUsed = payload.get("hintCount", 0)
+                print(f"Received answer from client {client_id}: {user_answer} with {hintsUsed} hints used")
+                is_correct, score, answer, hints = await gm.check_answer(user_answer, hintsUsed)
                 await manager.send_message(client_id, {
                     "type": "answer_result",
                     "correct": is_correct,

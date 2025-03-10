@@ -99,3 +99,13 @@ INSERT INTO game_results (game_id, user_id, score, game_length) VALUES
 ('g', '8', 6, 10),
 ('h', '9', 8, 10),
 ('i', '10', 9, 10);
+
+CREATE TABLE IF NOT EXISTS metrics (
+    user_id VARCHAR(255) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    correct_count INT DEFAULT 0,
+    total_count INT DEFAULT 0,
+    avg_hints_used FLOAT DEFAULT 0,
+    PRIMARY KEY (user_id, category),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);

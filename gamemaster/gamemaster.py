@@ -28,6 +28,8 @@ class GameMaster:
         self.score = 0
         self.id = gm_instance_id
         self.questions = []
+        self.scores = []
+        self.hints_used = []
         self.max_questions = max_questions
         self.downvoted_questions = []
 
@@ -47,6 +49,8 @@ class GameMaster:
                 response = await client.post(f"{CACHE_SERVICE_URL}/getbatch/", json=payload)
                 response.raise_for_status()
                 self.questions = response.json()["batch"]
+                self.scores = [0 for _ in range(len(self.questions))]
+                self.hints_used = [0 for _ in range(len(self.questions))]
                 print("Loaded questions:", self.questions)
             except Exception as e:
                 print("Error loading questions:", e)
@@ -93,7 +97,7 @@ class GameMaster:
 
         return False
 
-    async def check_answer(self, answer):
+    async def check_answer(self, answer, hintsUsed):
         # Implement logic to check the answer
         await self.load_questions()
 
@@ -102,7 +106,9 @@ class GameMaster:
             correct_answer = q["answer"]
 
             if self._advanced_answer_check(answer, correct_answer):
-                self.score += 10
+                self.scores[self.current_question] = 40 - 10*hintsUsed
+                self.score += self.scores[self.current_question]
+                self.hints_used[self.current_question] = hintsUsed
                 result = True
             else:
                 result = False
@@ -147,10 +153,32 @@ class GameMaster:
         """, (self.id, self.client_id, self.score, len(self.questions)))
         conn.commit()
 
-        # Test if the data was written
-        cursor.execute("SELECT * FROM game_results WHERE game_id = '%s'", (self.id,))
-        results = cursor.fetchall()
-        print("Inserted game results:", results, flush=True)
+        n = len(self.questions)
+        for i in range(n):
+            category = self.questions[i]["category"]
+            score = self.scores[i]
+
+            if score > 0:
+                query = """
+                    INSERT INTO metrics (user_id, category, correct_count, total_count, avg_hints_used)
+                    VALUES (%s, %s, 1, 1, %s)
+                    ON CONFLICT (user_id, category) DO UPDATE
+                    SET correct_count = metrics.correct_count + 1,
+                        total_count = metrics.total_count + 1,
+                        avg_hints_used = (metrics.avg_hints_used * metrics.correct_count + %s) / (metrics.correct_count + 1)
+                """
+                params = (self.client_id, category, self.hints_used[i], self.hints_used[i])
+            else:
+                query = """
+                    INSERT INTO metrics (user_id, category, correct_count, total_count)
+                    VALUES (%s, %s, 0, 1)
+                    ON CONFLICT (user_id, category) DO UPDATE
+                    SET total_count = metrics.total_count + 1
+                """
+                params = (str(self.client_id), category)
+            
+            cursor.execute(query, params)
+            conn.commit()
 
         cursor.close()
         conn.close()
