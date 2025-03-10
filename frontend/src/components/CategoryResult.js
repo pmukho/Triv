@@ -40,11 +40,20 @@ const ScoreByCategory = () => {
             if (!data.error) {
                 console.log(data);
                 const proc_data = categories.map((category) => {
-                    const { accuracy, avgHints } = data[category] || {};
+                    if (!data[category]) {
+                        return {
+                            category,
+                            accuracy: DEFAULT_ACCURACY,
+                            avgHints: DEFAULT_AVG_HINTS
+                        };
+                    }
+                    
+                    const { accuracy, avg_hints_used } = data[category];
+                    
                     return {
                         category,
                         accuracy: accuracy !== undefined ? accuracy : DEFAULT_ACCURACY,
-                        avgHints: avgHints !== undefined ? avgHints : DEFAULT_AVG_HINTS
+                        avgHints: avg_hints_used !== undefined ? avg_hints_used : DEFAULT_AVG_HINTS
                     };
                 });
 
@@ -70,7 +79,7 @@ const ScoreByCategory = () => {
                     {stats.map(({ category, accuracy, avgHints }, index) => (
                         <div key={index} className="mb-2 p-4 border border-gray-300 rounded-lg">
                             <h3 className="text-lg font-semibold">{category}</h3>
-                            <p className="text-sm text-gray-600">Accuracy: {(accuracy*100).toFixed(2)}% | Avg. Hints Used: {avgHints.toFixed(2)}</p>
+                            <p className="text-sm text-gray-600">Accuracy: {(accuracy*100).toFixed(2)}% | Avg. Hints Used: {avgHints !== undefined ? avgHints.toFixed(2) : "N/A"}</p>
                         </div>
                     ))}
                 </div>
