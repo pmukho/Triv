@@ -51,10 +51,10 @@ const Results = () => {
                                 Try Again
                             </button>
                             <button 
-                                onClick={() => navigate("/leaderboard")}
-                                className="w-full bg-green-500 text-white py-4 text-xl rounded-lg font-bold hover:bg-green-600 transition-colors duration-300"
+                            onClick={() => navigate("/category-results")}
+                            className="w-full bg-green-500 text-white py-4 text-xl rounded-lg font-bold hover:bg-green-600 transition-colors duration-300"
                             >
-                                View Leaderboard
+                            View Category Results
                             </button>
                             <button 
                                 onClick={() => navigate("/gamehistory")}
