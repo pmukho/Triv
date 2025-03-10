@@ -47,8 +47,11 @@ class GameMaster:
                 "batch": [{"category": "CAT1", "count": 3}, {"category": "CAT2", "count": 3}]
             }
         else:
-            payload["user_id"] = str(self.client_id)
-            payload["batch"] = []
+            payload = {
+                "user_id": str(self.client_id),
+                "batch": [],
+                "batch_size": 0
+            }
             for cat, count in categorySelect.items():
                 if count > 0:
                     payload["batch"].append({"category": cat, "count": count})

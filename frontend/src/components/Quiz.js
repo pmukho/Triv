@@ -133,7 +133,7 @@ const Quiz = () => {
     ws.onopen = () => {
       console.log('WebSocket connected4');
       console.log(categoryDist)
-      sendMessage('start_question', categoryDist);
+      sendMessage('start_question', JSON.parse(categoryDist));
     };
 
     ws.onmessage = (event) => {
