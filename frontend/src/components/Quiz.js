@@ -194,7 +194,7 @@ const Quiz = () => {
     setCurrentQuestion((prev) => {
       const nextNumber = prev.questionNumber + 1;
       if (nextNumber > maxQuestions) {
-        navigate('/CategoryResults');
+        navigate('/results');
         return prev; // Returning prev since we don't need to update state further
       }
       return {
