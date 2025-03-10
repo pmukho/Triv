@@ -199,8 +199,6 @@ async def login(data: LoginData):
         if conn:
             conn.close()
 
-
-
 @app.get('/ws/leaderboard/get_leaderboard')
 async def get_leaderboard():
     try:
@@ -234,3 +232,44 @@ async def get_leaderboard():
         if conn:
             conn.close()
 
+@app.get('/ws/category-stats/{client_id}')
+async def get_category_stats(client_id: str):
+    print(f"Getting category stats for client {client_id}", flush=True)
+
+    category_stats = {}
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        query = """
+            SELECT
+                category,
+                CASE
+                    WHEN total_count = 0 THEN 0.0
+                    ELSE (correct_count::float / total_count)
+                END AS accuracy,
+                avg_hints_used
+            FROM metrics
+            WHERE user_id = %s
+        """
+        cursor.execute(query, (client_id,))
+        results = cursor.fetchall()
+        print({"data": results}, flush=True)
+
+        for row in results:
+            category = row[0]
+            accuracy = row[1]
+            avg_hints_used = row[2]
+            category_stats[category] = {
+                "accuracy": accuracy,
+                "avg_hints_used": avg_hints_used
+            }
+        return category_stats
+    
+    except Exception as e:
+        print(f"Error fetching category stats: {str(e)}", flush=True)
+        raise e
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
