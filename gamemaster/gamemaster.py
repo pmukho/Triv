@@ -32,15 +32,21 @@ class GameMaster:
         self.hints_used = []
         self.max_questions = max_questions
         self.downvoted_questions = []
+        self.category_select = None  # Store category selection
 
-    async def load_questions(self, categorySelect):
+    async def load_questions(self, categorySelect=None):
         # Load batch from cache
         if self.questions:
             return
 
+        # Update stored category selection if new one provided
+        if categorySelect is not None:
+            self.category_select = categorySelect
+        
         # Prepare payload
         payload = None
-        if categorySelect == {}:
+        
+        if not self.category_select or not isinstance(self.category_select, dict):
             payload = {
                 "user_id": str(self.client_id),
                 "batch_size": 2,
@@ -52,7 +58,7 @@ class GameMaster:
                 "batch": [],
                 "batch_size": 0
             }
-            for cat, count in categorySelect.items():
+            for cat, count in self.category_select.items():
                 if count > 0:
                     payload["batch"].append({"category": cat, "count": count})
             payload["batch_size"] = len(payload["batch"])
@@ -72,8 +78,20 @@ class GameMaster:
                 self.questions = []
 
     async def get_hints(self, categorySelect):
+        # Update stored category selection
+        if categorySelect is not None:
+            self.category_select = categorySelect
+            
         # Implement logic to get the next hints
-        await self.load_questions(categorySelect)
+        await self.load_questions()
+        
+        # If we've answered all our loaded questions but haven't reached max_questions,
+        # we need to load more
+        if self.current_question >= len(self.questions) and self.current_question < self.max_questions:
+            # Clear questions to force loading more
+            self.questions = []
+            await self.load_questions()
+            
         if self.current_question < len(self.questions):
             q = self.questions[self.current_question]
             hints = [q["hint1"], q["hint2"], q["hint3"]]
@@ -129,6 +147,12 @@ class GameMaster:
                 result = False
 
             self.current_question += 1
+            
+            # If we've used all questions but haven't reached max_questions,
+            # clear questions to force loading more in next get_hints call
+            if self.current_question >= len(self.questions) and self.current_question < self.max_questions:
+                self.questions = []
+                
             return result, self.score, correct_answer, [q["hint1"], q["hint2"], q["hint3"]]
         else:
             return False, self.score, "", []

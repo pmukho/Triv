@@ -210,7 +210,10 @@ const Quiz = () => {
     });
     setTimeLeft(30);
     setPanels(DEFAULT_PANELS);
-    sendMessage('start_question', {});
+    
+    // Get category selection from localStorage
+    const categoryDist = localStorage.getItem('categorySelection');
+    sendMessage('start_question', JSON.parse(categoryDist));
   }, [navigate, sendMessage, setHintCount]);
   
 
