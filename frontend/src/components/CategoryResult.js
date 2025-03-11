@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import ParticlesBackground from "./ParticlesBackground";
-
+import { useState, useEffect } from "react";
 const categories = [
     "Geography",
     "History",
@@ -13,16 +13,57 @@ const categories = [
     "Arts",
     "People"
 ];
+const DEFAULT_ACCURACY = 0.0;
+const DEFAULT_AVG_HINTS = 0.0;
+
+const getCategoryStats = async () => {
+    try {
+        const res = await fetch(`/ws/category-stats/${localStorage.getItem("id")}`, {
+            method: 'GET',
+        });
+        const data = await res.json();
+        return data;
+    } catch (error) {
+        console.log('Error:', error);
+        return { error: "An error occurred while fetching" };
+    }
+};
 
 const ScoreByCategory = () => {
     const navigate = useNavigate();
+    const [stats, setStats] = useState([]);
 
-    // Mock data 
-    const categoryStats = categories.map(category => ({
-        category,
-        avgAccuracy: (Math.random() * 100).toFixed(2),
-        avgScore: Math.floor(Math.random() * 10)
-    }));
+    useEffect(() => {
+        const fetchCategoryStats = async () => {
+            const data = await getCategoryStats();
+            
+            if (!data.error) {
+                console.log(data);
+                const proc_data = categories.map((category) => {
+                    if (!data[category]) {
+                        return {
+                            category,
+                            accuracy: DEFAULT_ACCURACY,
+                            avgHints: DEFAULT_AVG_HINTS
+                        };
+                    }
+                    
+                    const { accuracy, avg_hints_used } = data[category];
+                    
+                    return {
+                        category,
+                        accuracy: accuracy !== undefined ? accuracy : DEFAULT_ACCURACY,
+                        avgHints: avg_hints_used !== undefined ? avg_hints_used : DEFAULT_AVG_HINTS
+                    };
+                });
+
+                console.log(proc_data);
+                setStats(proc_data);
+            }
+        }
+        fetchCategoryStats();
+        console.log(stats);
+    }, []);
 
     return (
         <div className="relative min-h-screen flex justify-center items-center">
@@ -35,10 +76,10 @@ const ScoreByCategory = () => {
                 </div>
                 {/* Stats Section */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-                    {categoryStats.map(({ category, avgAccuracy, avgScore }, index) => (
+                    {stats.map(({ category, accuracy, avgHints }, index) => (
                         <div key={index} className="mb-2 p-4 border border-gray-300 rounded-lg">
                             <h3 className="text-lg font-semibold">{category}</h3>
-                            <p className="text-sm text-gray-600">Avg Accuracy: {avgAccuracy}% | Avg Score: {avgScore}</p>
+                            <p className="text-sm text-gray-600">Accuracy: {(accuracy*100).toFixed(2)}% | Avg. Hints Used: {avgHints !== undefined ? avgHints.toFixed(2) : "N/A"}</p>
                         </div>
                     ))}
                 </div>

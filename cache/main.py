@@ -17,7 +17,7 @@ db_user = os.environ.get("POSTGRES_USER")
 db_password = os.environ.get("POSTGRES_PASSWORD")
 db_host = "postgres-db"
 db_port = "5432"
-MAX_DB_CONNECTIONS = 5
+MAX_DB_CONNECTIONS = 20
 MIN_DB_CONNECTIONS = 1
 
 db_conn_pool = pool.ThreadedConnectionPool(
@@ -407,6 +407,9 @@ async def serve_game_batch(batch_req: GameBatchReq):
 async def downvote_questions(downvote_req: DownvoteBatchReq):
     # update database records
     print("Downvoting questions: ", downvote_req)
+    if len(downvote_req.batch) == 0:
+        return {"status": "success"}
+
     placeholders = ",".join(["%s"] * len(downvote_req.batch))
     query = f"""
         UPDATE questions

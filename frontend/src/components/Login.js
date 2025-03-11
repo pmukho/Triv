@@ -55,7 +55,12 @@ const Login = () => {
                     <div className="w-full md:w-1/2 bg-blue-500 text-white p-12 flex flex-col justify-center">
                         <h2 className="text-5xl font-bold mb-8">Rules</h2>
                         <p className="text-lg leading-relaxed">
-                            Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+                            Welcome to Triv! Here are some rules: <br></br>
+                            1. You will get to pick how many Q's per category up to a total of 10. <br></br>
+                            2. You will have a 30 second window to answer each question. <br></br>
+                            3. Every 10 seconds, you will see a new hint (up to 3). <br></br>
+                            4. You get more points for guessing correctly with less hints. <br></br>
+                            5. You can only guess once!
                         </p>
                     </div>
                     <div className="w-full md:w-1/2 p-12 flex flex-col space-y-4">
@@ -69,7 +74,7 @@ const Login = () => {
                             required
                         />
                         <GoogleLogin onSuccess={handleSuccess} onError={handleError} />
-                        <button 
+                        {/* <button 
                             onClick={() => navigate("/leaderboard")} 
                             className="w-full bg-orange-500 text-white py-3 text-lg rounded-md font-bold hover:bg-orange-600 transition"
                         >
@@ -80,7 +85,7 @@ const Login = () => {
                             className="w-full bg-green-500 text-white py-3 text-lg rounded-md font-bold hover:bg-green-600 transition"
                         >
                             Categories
-                        </button>
+                        </button> */}
                     </div>
                 </div>
             </div>
