@@ -99,6 +99,7 @@ services:
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       DUMMY_MODE: ${DUMMY_MODE}
+      OPENAI_USER_AGENT: ${OPENAI_USER_AGENT}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
