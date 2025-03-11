@@ -35,7 +35,7 @@ const Quiz = () => {
   const [score, setScore] = useState(0);
   const [hintCount, setHintCount] = useState(0);
 
-  const maxQuestions = location.state?.maxQuestions || 5;
+  const maxQuestions = location.state?.maxQuestions || 10;
   const [currentQuestion, setCurrentQuestion] = useState({
     question: 'Question 1',
     questionNumber: 1,
@@ -98,7 +98,7 @@ const Quiz = () => {
 
     setAnswerRevealed(true);
     setCorrectAnswer(correctAns || 'Unknown');
-    setPostAnswerTimeLeft(1);
+    setPostAnswerTimeLeft(3);
   }, []);
 
   // Dispatch server messages based on type
@@ -126,7 +126,7 @@ const Quiz = () => {
   useEffect(() => {
     const id = localStorage.getItem('id');
     const categoryDist = localStorage.getItem('categorySelection');
-    const wsUrl = `/ws/quiz/${id}?${maxQuestions}`;
+    const wsUrl = `/ws/quiz/${id}?maxQuestions=${maxQuestions}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
