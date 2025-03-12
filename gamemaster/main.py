@@ -25,31 +25,69 @@ DB_CONFIG = {
 }
 
 def get_db_connection():
+    """
+    Establishes a connection to the PostgreSQL database using the provided configuration.
+
+    Returns:
+        psycopg2.extensions.connection: A connection object to the PostgreSQL database.
+    """
     conn = psycopg2.connect(**DB_CONFIG)
     return conn
 
 
 class ConnectionManager:
+    """
+    Manages active WebSocket connections.
+    """
     def __init__(self):
+        """
+        Initializes the ConnectionManager with an empty dictionary to store active connections.
+        """
         self.active_connections: dict[int, WebSocket] = {}
 
     async def connect(self, client_id: int, websocket: WebSocket):
+        """
+        Accepts a new WebSocket connection and adds it to the active connections dictionary.
+
+        Args:
+            client_id (int): The ID of the client connecting.
+            websocket (WebSocket): The WebSocket connection object.
+        """
         if client_id not in self.active_connections:
             await websocket.accept()
             self.active_connections[client_id] = websocket
         print(f"Client {client_id} connected.")
 
     def disconnect(self, client_id: int):
+        """
+        Removes a WebSocket connection from the active connections dictionary.
+
+        Args:
+            client_id (int): The ID of the client to disconnect.
+        """
         if client_id in self.active_connections:
             del self.active_connections[client_id]
             print(f"Client {client_id} disconnected.")
 
     async def send_message(self, client_id: int, message: dict):
+        """
+        Sends a JSON message to a specific client via WebSocket.
+
+        Args:
+            client_id (int): The ID of the client to send the message to.
+            message (dict): The message to send, as a dictionary.
+        """
         ws = self.active_connections.get(client_id)
         if ws:
             await ws.send_json(message)
             
     async def broadcast(self, message: dict):
+        """
+        Broadcasts a JSON message to all connected clients.
+
+        Args:
+            message (dict): The message to broadcast, as a dictionary.
+        """
         for ws in self.active_connections.values():
             await ws.send_json(message)
 
@@ -60,6 +98,13 @@ manager = ConnectionManager()
 hint_tasks = {}
 @app.websocket("/ws/quiz/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: int):
+    """
+    WebSocket endpoint for handling quiz game logic.
+
+    Args:
+        websocket (WebSocket): The WebSocket connection object.
+        client_id (int): The ID of the client connecting.
+    """
     # Connect the client
     await manager.connect(client_id, websocket)
     
@@ -125,6 +170,13 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
         await websocket.close()
 
 async def send_hints_timed(game_master, client_id: int):
+    """
+    Sends hints to the client at timed intervals.
+
+    Args:
+        game_master: The game master instance.
+        client_id (int): The ID of the client to send hints to.
+    """
     try:
         # Fetch hints
         while True:
@@ -164,10 +216,26 @@ async def send_hints_timed(game_master, client_id: int):
 
 
 class LoginData(BaseModel):
+    """
+    Pydantic model for login data.
+
+    Attributes:
+        username (str): The username of the user.
+        client_id (str): The ID of the client logging in.
+    """
     username: str
     client_id: str
 @app.post('/ws/login')
 async def login(data: LoginData):
+    """
+    Endpoint for user login.  If the user exists, their username is updated if it doesn't match the provided username.  If the user doesn't exist, a new user is created.
+
+    Args:
+        data (LoginData): The login data containing username and client ID.
+
+    Returns:
+        dict: A dictionary containing the status of the login operation.
+    """
     print(f"Logging in user {data.username} with client_id {data.client_id},", flush=True) 
     try:
         conn = get_db_connection()
@@ -201,6 +269,12 @@ async def login(data: LoginData):
 
 @app.get('/ws/leaderboard/get_leaderboard')
 async def get_leaderboard():
+    """
+    Endpoint to retrieve the leaderboard data.
+
+    Returns:
+        list: A list of dictionaries, where each dictionary contains the username and score of a user.
+    """
     try:
         print("Getting leaderboard", flush=True)
         conn = get_db_connection()
@@ -231,4 +305,3 @@ async def get_leaderboard():
             cursor.close()
         if conn:
             conn.close()
-
