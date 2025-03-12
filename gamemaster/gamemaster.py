@@ -5,9 +5,13 @@ import psycopg2
 import os
 
 CACHE_SERVICE_URL = "http://cache:8000"
+"""The URL for the cache service."""
 MIN_ANSWER_SIMILARITY = 0.8
+"""Minimum similarity ratio for accepting a user's answer."""
 MIN_TOKEN_SIMILARITY = 0.5
+"""Minimum similarity ratio based on common tokens for accepting a user's answer."""
 DEFAULT_MAX_QUESTIONS = 5
+"""Default maximum number of questions in a game."""
 DB_CONFIG = {
     "dbname": os.environ.get("POSTGRES_DB"),
     "user": os.environ.get("POSTGRES_USER"),
@@ -15,26 +19,49 @@ DB_CONFIG = {
     "host": "postgres-db",
     "port": "5432"
 }
+"""Database configuration settings."""
 
 def get_db_connection():
+    """
+    Establishes a connection to the PostgreSQL database.
+
+    Returns:
+        psycopg2.extensions.connection: A connection object to the PostgreSQL database.
+    """
     conn = psycopg2.connect(**DB_CONFIG)
     return conn
 
 
 class GameMaster:
+    """
+    Manages the game flow and logic for a single client.
+    """
     def __init__(self, client_id, gm_instance_id, max_questions=DEFAULT_MAX_QUESTIONS):
+        """
+        Initializes a new GameMaster instance.
+
+        Args:
+            client_id (int): The ID of the client playing the game.
+            gm_instance_id (str): A unique identifier for this GameMaster instance.
+            max_questions (int, optional): The maximum number of questions for the game. Defaults to DEFAULT_MAX_QUESTIONS.
+        """
         self.client_id = client_id
+        """The ID of the client playing the game."""
         self.current_question = 0
+        """The index of the current question."""
         self.score = 0
+        """The player's current score."""
         self.id = gm_instance_id
+        """A unique identifier for this GameMaster instance."""
         self.questions = []
         self.scores = []
         self.hints_used = []
+        """A list to store the questions for the game."""
         self.max_questions = max_questions
+        """The maximum number of questions for the game."""
         self.downvoted_questions = []
-        self.category_select = None  # Store category selection
 
-    async def load_questions(self, categorySelect=None):
+    async def load_questions(self):
         # Load batch from cache
         if self.questions:
             return
@@ -77,11 +104,7 @@ class GameMaster:
                 print("Error loading questions:", e)
                 self.questions = []
 
-    async def get_hints(self, categorySelect):
-        # Update stored category selection
-        if categorySelect is not None:
-            self.category_select = categorySelect
-            
+    async def get_hints(self):
         # Implement logic to get the next hints
         await self.load_questions()
         
@@ -100,6 +123,15 @@ class GameMaster:
             return [], False
     
     def _normalize_answer(self, answer):
+        """
+        Normalizes an answer by converting it to lowercase, removing non-alphanumeric characters, and filtering out stop words.
+
+        Args:
+            answer (str): The answer to normalize.
+
+        Returns:
+            list: A list of normalized tokens.
+        """
         STOP_WORDS = set(["the", "a", "an", "of", "in", "on", "at", "and", "or", "but", "from"])
         answer = answer.lower()
         answer = re.sub(r'[^\w\s]', '', answer) # remove non-words and non-whitespace
@@ -108,6 +140,17 @@ class GameMaster:
         return tokens
     
     def _advanced_answer_check(self, user_answer, correct_answer, threshold = MIN_ANSWER_SIMILARITY):
+        """
+        Performs an advanced check to determine if the user's answer is similar to the correct answer.
+
+        Args:
+            user_answer (str): The user's answer.
+            correct_answer (str): The correct answer.
+            threshold (float, optional): The minimum similarity ratio for accepting the answer. Defaults to MIN_ANSWER_SIMILARITY.
+
+        Returns:
+            bool: True if the user's answer is considered correct, False otherwise.
+        """
         user_tokens = self._normalize_answer(user_answer)
         correct_tokens = self._normalize_answer(correct_answer)
         
@@ -130,7 +173,7 @@ class GameMaster:
 
         return False
 
-    async def check_answer(self, answer, hintsUsed):
+    async def check_answer(self, answer):
         # Implement logic to check the answer
         await self.load_questions()
 
@@ -159,6 +202,12 @@ class GameMaster:
         
 
     def downvote_question(self):
+        """
+        Downvotes the current question.
+
+        Returns:
+            str: The ID of the downvoted question.
+        """
         index = self.current_question - 1
         if 0 <= index < len(self.questions):
             question = self.questions[index]
@@ -167,6 +216,9 @@ class GameMaster:
         return question["id"]
     
     async def notify_downvoted_questions(self):
+        """
+        Notifies the cache service about the downvoted questions.
+        """
         payload = {
             "user_id": str(self.client_id),
             "batch": self.downvoted_questions
@@ -183,6 +235,9 @@ class GameMaster:
         print(f"Downvoted questions sent {self.downvoted_questions}")
     
     async def send_results(self):
+        """
+        Sends the game results to the database.
+        """
         # Writing Results to DB
         conn = get_db_connection()
         cursor = conn.cursor()
