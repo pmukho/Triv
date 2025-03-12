@@ -6,6 +6,8 @@ import Leaderboard from "./components/Leaderboard";
 import Quiz from "./components/Quiz";
 import GameHistory from "./components/GameHistory";
 import Results from "./components/Results";
+import CategoryPage from "./components/Category";
+import ScoreByCategory from "./components/CategoryResult";
 import { GoogleOAuthProvider } from '@react-oauth/google';
 
 import "./index.css";
@@ -19,10 +21,12 @@ root.render(
         <Router>
             <Routes>
                 <Route path="/" element={<Login />} />
+                <Route path="/category" element={<CategoryPage />} />
                 <Route path="/quiz" element={<Quiz />} />
+                <Route path="/category-results" element={<ScoreByCategory />} />
                 <Route path="/results" element={<Results />} />
                 <Route path="/leaderboard" element={<Leaderboard />} />
-                <Route path="/gamehistory" element={<GameHistory/>} />
+                <Route path="/gamehistory" element={<GameHistory />} />
             </Routes>
         </Router>
     </React.StrictMode>

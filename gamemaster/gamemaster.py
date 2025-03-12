@@ -54,46 +54,67 @@ class GameMaster:
         self.id = gm_instance_id
         """A unique identifier for this GameMaster instance."""
         self.questions = []
+        self.scores = []
+        self.hints_used = []
         """A list to store the questions for the game."""
         self.max_questions = max_questions
         """The maximum number of questions for the game."""
         self.downvoted_questions = []
-        """A list to store the IDs of downvoted questions."""
 
     async def load_questions(self):
-        """
-        Loads a batch of questions from the cache service.
-        """
         # Load batch from cache
         if self.questions:
             return
 
+        # Update stored category selection if new one provided
+        if categorySelect is not None:
+            self.category_select = categorySelect
+        
         # Prepare payload
-        payload = {
-            "user_id": str(self.client_id),
-            "batch_size": 2,
-            "batch": [{"category": "CAT1", "count": 3}, {"category": "CAT2", "count": 3}]
-        }
+        payload = None
+        
+        if not self.category_select or not isinstance(self.category_select, dict):
+            payload = {
+                "user_id": str(self.client_id),
+                "batch_size": 2,
+                "batch": [{"category": "CAT1", "count": 3}, {"category": "CAT2", "count": 3}]
+            }
+        else:
+            payload = {
+                "user_id": str(self.client_id),
+                "batch": [],
+                "batch_size": 0
+            }
+            for cat, count in self.category_select.items():
+                if count > 0:
+                    payload["batch"].append({"category": cat, "count": count})
+            payload["batch_size"] = len(payload["batch"])
+
+        print("Payload for loading questions:", payload)
+
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(f"{CACHE_SERVICE_URL}/getbatch/", json=payload)
                 response.raise_for_status()
                 self.questions = response.json()["batch"]
+                self.scores = [0 for _ in range(len(self.questions))]
+                self.hints_used = [0 for _ in range(len(self.questions))]
                 print("Loaded questions:", self.questions)
             except Exception as e:
                 print("Error loading questions:", e)
                 self.questions = []
 
     async def get_hints(self):
-        """
-        Retrieves hints for the current question.
-
-        Returns:
-            tuple: A tuple containing a list of hints (strings) and a boolean indicating if a question is available.
-                   Returns ([], False) if there are no more questions.
-        """
         # Implement logic to get the next hints
         await self.load_questions()
+        
+        # If we've answered all our loaded questions but haven't reached max_questions,
+        # we need to load more
+        if self.current_question >= len(self.questions) and self.current_question < self.max_questions:
+            # Clear questions to force loading more
+            self.questions = []
+            await self.load_questions()
+            
         if self.current_question < len(self.questions):
             q = self.questions[self.current_question]
             hints = [q["hint1"], q["hint2"], q["hint3"]]
@@ -153,19 +174,6 @@ class GameMaster:
         return False
 
     async def check_answer(self, answer):
-        """
-        Checks if the user's answer is correct.
-
-        Args:
-            answer (str): The user's answer.
-
-        Returns:
-            tuple: A tuple containing:
-                - bool: True if the answer is correct, False otherwise.
-                - int: The player's current score.
-                - str: The correct answer.
-                - list: A list of hints for the current question.
-        """
         # Implement logic to check the answer
         await self.load_questions()
 
@@ -174,12 +182,20 @@ class GameMaster:
             correct_answer = q["answer"]
 
             if self._advanced_answer_check(answer, correct_answer):
-                self.score += 10
+                self.scores[self.current_question] = 40 - 10*hintsUsed
+                self.score += self.scores[self.current_question]
+                self.hints_used[self.current_question] = hintsUsed
                 result = True
             else:
                 result = False
 
             self.current_question += 1
+            
+            # If we've used all questions but haven't reached max_questions,
+            # clear questions to force loading more in next get_hints call
+            if self.current_question >= len(self.questions) and self.current_question < self.max_questions:
+                self.questions = []
+                
             return result, self.score, correct_answer, [q["hint1"], q["hint2"], q["hint3"]]
         else:
             return False, self.score, "", []
@@ -229,21 +245,34 @@ class GameMaster:
             INSERT INTO game_results (game_id,user_id, score,game_length,game_timestamp)
             VALUES (%s ,%s, %s, %s, NOW())
         """, (self.id, self.client_id, self.score, len(self.questions)))
-        for question_number,question in enumerate(self.questions):
-            cursor.execute("""
-                INSERT INTO questions_in_game (game_id, question_number,question_id)
-                VALUES (%s,%s, %s)
-            """, (self.id,question_number+1,question["id"]))
         conn.commit()
 
-        # Test if the data was written
-        cursor.execute("SELECT * FROM questions_in_game WHERE game_id = '%s'", (self.id,))
-        questions = cursor.fetchall()
-        print("Inserted questions:", questions, flush=True)
+        n = len(self.questions)
+        for i in range(n):
+            category = self.questions[i]["category"]
+            score = self.scores[i]
 
-        cursor.execute("SELECT * FROM game_results WHERE game_id = '%s'", (self.id,))
-        results = cursor.fetchall()
-        print("Inserted game results:", results, flush=True)
+            if score > 0:
+                query = """
+                    INSERT INTO metrics (user_id, category, correct_count, total_count, avg_hints_used)
+                    VALUES (%s, %s, 1, 1, %s)
+                    ON CONFLICT (user_id, category) DO UPDATE
+                    SET correct_count = metrics.correct_count + 1,
+                        total_count = metrics.total_count + 1,
+                        avg_hints_used = (metrics.avg_hints_used * metrics.correct_count + %s) / (metrics.correct_count + 1)
+                """
+                params = (self.client_id, category, self.hints_used[i], self.hints_used[i])
+            else:
+                query = """
+                    INSERT INTO metrics (user_id, category, correct_count, total_count)
+                    VALUES (%s, %s, 0, 1)
+                    ON CONFLICT (user_id, category) DO UPDATE
+                    SET total_count = metrics.total_count + 1
+                """
+                params = (str(self.client_id), category)
+            
+            cursor.execute(query, params)
+            conn.commit()
 
         cursor.close()
         conn.close()

@@ -5,6 +5,7 @@ import psycopg2
 from psycopg2.extras import execute_batch
 from typing import List, Dict
 import os
+import random
 
 DB_CONFIG = {
     "dbname": os.environ.get("POSTGRES_DB"),
@@ -57,6 +58,7 @@ def fetch_petscan_data(psid: str):
                                     'category': psid_to_category.get(psid, 'Unknown')
                                 })
             
+        random.shuffle(articles)
         return articles
             
     except requests.RequestException as e:
@@ -68,29 +70,6 @@ def fetch_petscan_data(psid: str):
     except Exception as e:
         print(f"Unexpected error: {str(e)}")
         return []
-
-# def connect_to_db() -> psycopg2.extensions.connection:
-#     try:
-#         return psycopg2.connect(**DB_CONFIG)
-#     except psycopg2.Error as e:
-#         print(f"Database connection error: {e}")
-
-# def insert_articles(conn: psycopg2.extensions.connection, articles: List[Dict]):
-#     with conn.cursor() as cur:
-#         query = """
-#             INSERT INTO wiki_articles (title, category)
-#             VALUES (%s, %s)
-#             ON CONFLICT (title) DO UPDATE 
-#             SET category = EXCLUDED.category
-#         """
-        
-#         article_data = [(
-#             article['title'],
-#             article['category']
-#         ) for article in articles]
-        
-#         execute_batch(cur, query, article_data)
-#     conn.commit()
 
 def main():
     output_dir = "./db/data"
@@ -105,14 +84,14 @@ def main():
     
     # Write to CSV
     csv_path = os.path.join(output_dir, "wiki_articles.csv")
-    with open(csv_path, 'w', newline='') as csvfile:
+    with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=['title', 'category'])
         writer.writeheader()
         writer.writerows(all_articles)
     
     # Write to JSON
     json_path = os.path.join(output_dir, "wiki_articles.json")
-    with open(json_path, 'w') as jsonfile:
+    with open(json_path, 'w', encoding='utf-8') as jsonfile:
         json.dump(all_articles, jsonfile)
         
     print(f"Exported {len(all_articles)} articles to {csv_path} and {json_path}")

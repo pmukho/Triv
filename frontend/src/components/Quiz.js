@@ -33,8 +33,9 @@ const Quiz = () => {
   const [panels, setPanels] = useState(DEFAULT_PANELS);
   const [loadingHints, setLoadingHints] = useState(true);
   const [score, setScore] = useState(0);
+  const [hintCount, setHintCount] = useState(0);
 
-  const maxQuestions = location.state?.maxQuestions || 5;
+  const maxQuestions = location.state?.maxQuestions || 10;
   const [currentQuestion, setCurrentQuestion] = useState({
     question: 'Question 1',
     questionNumber: 1,
@@ -55,6 +56,7 @@ const Quiz = () => {
 
   // Update panels with a new hint
   const handleNewHint = useCallback((hint) => {
+    setHintCount((prev) => prev + 1);
     setPanels((prev) => {
       const placeholderEntry = Object.entries(prev).find(
         ([, panel]) => panel.content === 'Loading...'
@@ -96,7 +98,7 @@ const Quiz = () => {
 
     setAnswerRevealed(true);
     setCorrectAnswer(correctAns || 'Unknown');
-    setPostAnswerTimeLeft(1);
+    setPostAnswerTimeLeft(3);
   }, []);
 
   // Dispatch server messages based on type
@@ -123,13 +125,15 @@ const Quiz = () => {
   // WebSocket connection management
   useEffect(() => {
     const id = localStorage.getItem('id');
-    const wsUrl = `/ws/quiz/${id}?${maxQuestions}`;
+    const categoryDist = localStorage.getItem('categorySelection');
+    const wsUrl = `/ws/quiz/${id}?maxQuestions=${maxQuestions}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
       console.log('WebSocket connected4');
-      sendMessage('start_question', {});
+      console.log(categoryDist)
+      sendMessage('start_question', JSON.parse(categoryDist));
     };
 
     ws.onmessage = (event) => {
@@ -155,7 +159,7 @@ const Quiz = () => {
 
     // If user time is up but not revealed, automatically submit blank
     if (timeLeft <= 0 && !answerRevealed) {
-      sendMessage('submit_answer', {});
+      sendMessage('submit_answer', {"answer": answer, "hintCount": hintCount});
       return;
     }
 
@@ -185,6 +189,7 @@ const Quiz = () => {
   // Move to the next question or navigate to results if done
   const handleNextQuestion = useCallback(() => {
     setAnswer('');
+    setHintCount(0);
 
     setAnswerRevealed(false);
     setCorrectAnswer('');
@@ -205,14 +210,17 @@ const Quiz = () => {
     });
     setTimeLeft(30);
     setPanels(DEFAULT_PANELS);
-    sendMessage('start_question', {});
-  }, [navigate]);
+    
+    // Get category selection from localStorage
+    const categoryDist = localStorage.getItem('categorySelection');
+    sendMessage('start_question', JSON.parse(categoryDist));
+  }, [navigate, sendMessage, setHintCount]);
   
 
   // Handle answer form submission
   const handleSubmit = (e) => {
     e.preventDefault();
-    sendMessage('submit_answer', { answer });
+    sendMessage('submit_answer', {"answer": answer, "hintCount": hintCount});
   };
 
   // Downvote question

@@ -73,6 +73,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      question-gen:
+        condition: service_healthy
 
   game-factory:
     build:
@@ -96,6 +98,8 @@ services:
       - "8002:8000"
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      DUMMY_MODE: ${DUMMY_MODE}
+      OPENAI_USER_AGENT: ${OPENAI_USER_AGENT}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
