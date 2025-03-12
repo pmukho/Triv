@@ -32,6 +32,10 @@ INSERT INTO questions (id, category, hint1, hint2, hint3, answer) VALUES
 ('19', 'CAT2', 'h1', 'h2', 'h3', 'ans'),
 ('20', 'CAT2', 'h1', 'h2', 'h3', 'ans');
 
+COPY questions(hint1, hint2, hint3, answer, category, id)
+FROM '/docker-entrypoint-initdb.d/data/questions.csv'
+DELIMITER ',' CSV HEADER;
+
 UPDATE questions SET usage_count = 10 WHERE id = '1';
 UPDATE questions SET downvote_count = 5 WHERE id = '2';
 
@@ -99,3 +103,13 @@ INSERT INTO game_results (game_id, user_id, score, game_length) VALUES
 ('g', '8', 6, 10),
 ('h', '9', 8, 10),
 ('i', '10', 9, 10);
+
+CREATE TABLE IF NOT EXISTS metrics (
+    user_id VARCHAR(255) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    correct_count INT DEFAULT 0,
+    total_count INT DEFAULT 0,
+    avg_hints_used FLOAT DEFAULT 0,
+    PRIMARY KEY (user_id, category),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);

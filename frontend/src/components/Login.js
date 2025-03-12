@@ -1,4 +1,4 @@
-// src/components/Login.js
+// Updated Login.js with Original Google Auth and Required Username
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ParticlesBackground from './ParticlesBackground';
@@ -17,7 +17,7 @@ const sendLogin = async (clientId, userName) => {
         });
         const data = await res.json();
         console.log("Data:", data);
-        return data; // Return the API response
+        return data;
     } catch (error) {
         console.log('Error:', error);
         return { error: "An error occurred while submitting the answer." };
@@ -26,31 +26,25 @@ const sendLogin = async (clientId, userName) => {
 
 const Login = () => {
     const [name, setName] = useState("");
-    const [email, setEmail] = useState("");
     const navigate = useNavigate();
 
     const handleError = () => {
         console.log('Login Failed');
-        // Handle login error
     };
 
     const handleSuccess = async (credentialResponse) => {
-        // Store user info in localStorage or state management
+        if (!name.trim()) {
+            alert("Username is required to proceed.");
+            return;
+        }
         const decoded = jwtDecode(credentialResponse.credential);
-        const email = decoded.email;
         const userId = decoded.sub;
-        console.log('Login Success:', name, email, userId);
+        console.log('Login Success:', name, userId);
         localStorage.setItem('userName', name);
         localStorage.setItem('id', userId);
         const response = await sendLogin(userId, name);
         console.log('Response:', response);
-        navigate("/quiz", { state: { maxQuestions : 5 }}); 
-    };
-
-    const handleSubmit = (e) => {
-        // You can add validation here if needed
-        // For now, we'll just call handleSuccess with a mock credentialResponse
-        //handleSuccess({ clientId: 'mockClientId' });
+        navigate("/category"); // Redirect to Category Page before Quiz
     };
 
     return (
@@ -61,42 +55,37 @@ const Login = () => {
                     <div className="w-full md:w-1/2 bg-blue-500 text-white p-12 flex flex-col justify-center">
                         <h2 className="text-5xl font-bold mb-8">Rules</h2>
                         <p className="text-lg leading-relaxed">
-                            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec sit amet lacus viverra.
+                            Welcome to Triv! Here are some rules: <br></br>
+                            1. You will get to pick how many Q's per category up to a total of 10. <br></br>
+                            2. You will have a 30 second window to answer each question. <br></br>
+                            3. Every 10 seconds, you will see a new hint (up to 3). <br></br>
+                            4. You get more points for guessing correctly with less hints. <br></br>
+                            5. You can only guess once!
                         </p>
                     </div>
-                    <div className="w-full md:w-1/2 p-12">
-                        <h2 className="text-4xl font-bold text-center mb-10">TRIVIA GAME</h2>
-                        <form className="space-y-6" onSubmit={handleSubmit}>
-                            <input 
-                                type="text" 
-                                placeholder="Name" 
-                                value={name} 
-                                onChange={(e) => setName(e.target.value)} 
-                                className="w-full p-4 text-xl border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                required
-                            />
-                            {/* <input 
-                                type="email" 
-                                placeholder="Email" 
-                                value={email} 
-                                onChange={(e) => setEmail(e.target.value)} 
-                                className="w-full p-4 text-xl border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                required
-                            /> */}
-                            <GoogleLogin onSuccess={handleSuccess} onError={handleError} />
-                            {/* <button 
-                                type="submit"
-                                className="w-full bg-blue-500 text-white py-4 text-xl rounded-md font-bold hover:bg-blue-600 transition"
-                            >
-                                Submit
-                            </button> */}
-                        </form>
-                        <button 
+                    <div className="w-full md:w-1/2 p-12 flex flex-col space-y-4">
+                        <h2 className="text-4xl font-bold text-center mb-6">TRIVIA GAME</h2>
+                        <input 
+                            type="text" 
+                            placeholder="Name (Required)" 
+                            value={name} 
+                            onChange={(e) => setName(e.target.value)} 
+                            className="w-full p-3 text-lg border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                            required
+                        />
+                        <GoogleLogin onSuccess={handleSuccess} onError={handleError} />
+                        {/* <button 
                             onClick={() => navigate("/leaderboard")} 
-                            className="w-full mt-6 bg-orange-500 text-white py-4 text-xl rounded-md font-bold hover:bg-orange-600 transition"
+                            className="w-full bg-orange-500 text-white py-3 text-lg rounded-md font-bold hover:bg-orange-600 transition"
                         >
                             Leaderboard
                         </button>
+                        <button 
+                            onClick={() => navigate("/category")} 
+                            className="w-full bg-green-500 text-white py-3 text-lg rounded-md font-bold hover:bg-green-600 transition"
+                        >
+                            Categories
+                        </button> */}
                     </div>
                 </div>
             </div>
