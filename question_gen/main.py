@@ -19,6 +19,10 @@ tags_metadata = [
         "description": "Get a NAQT style trivia given an article title from the cache.\
             If OPENAI_USER_AGENT is set to 'DUMMY', the response will be a dummy response\
                 instead of calling the chatbot."
+    },
+    {
+        "name": "health",
+        "description": "Health check for the API"
     }
 ]
 
@@ -45,6 +49,7 @@ async def lifespan(app: FastAPI):
     llm = OpenAI()
     yield
 
+
 app = FastAPI(lifespan=lifespan, openapi_tags=tags_metadata)
 app.add_middleware(
     CORSMiddleware,
@@ -58,8 +63,21 @@ def read_root():
     return {"Hello": "World"}
 
 DUMMY_MODE = os.getenv("DUMMY_MODE", None)
-@app.post("/questions", tags=['questions'])
-def read_questions(articles: Articles):
+
+@app.post("/questions", tags=["questions"])
+def read_questions(articles: Articles)-> Questions:
+    """
+    Given a list of article titles, generate a NAQT style trivia question for each article.
+    
+    Parameters
+    ----------
+    articles: A list of article titles.
+
+    Returns
+    -------
+    questions: A list of NAQT style trivia questions.
+    """
+
     questions = []
     ok = True
     error = ""
@@ -136,7 +154,7 @@ def read_questions(articles: Articles):
             break
     return Questions(questions=questions, ok=ok, error=error)
 
-@app.get("/health")
+@app.get("/health", tags=["health"])
 def health_check():
     if os.environ['OPENAI_USER_AGENT'] == 'DUMMY':
         return {"status": "healthy", "message": "Dummy mode is enabled."}

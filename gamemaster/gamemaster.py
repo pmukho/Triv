@@ -22,6 +22,41 @@ def get_db_connection():
 
 
 class GameMaster:
+    """
+    A class to manage the game state, including loading questions, checking answers, and managing scores.
+    
+    Attributes
+    ----------
+    client_id : int
+        The unique identifier for the client.
+    current_question : int
+        The index of the current question being asked.
+    score : int
+        The current score of the player.
+    id : int
+        The unique identifier for the game instance.
+    questions : list
+        A list of questions for the game.
+    max_questions : int
+        The maximum number of questions allowed in the game.
+    downvoted_questions : list
+        A list of questions that have been downvoted by the player.
+        
+    Methods
+    -------
+    load_questions()
+        Loads a batch of questions from the cache service.
+    get_hints()
+        Retrieves hints for the current question.
+    check_answer(answer: str)
+        Checks the player's answer against the correct answer.
+    downvote_question()
+        Records a downvote for the current question.
+    notify_downvoted_questions()
+        Notifies the cache service of downvoted questions.
+    send_results()
+        Sends the game results to the database.
+    """
     def __init__(self, client_id, gm_instance_id, max_questions=DEFAULT_MAX_QUESTIONS):
         self.client_id = client_id
         self.current_question = 0
