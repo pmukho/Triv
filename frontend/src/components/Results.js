@@ -62,6 +62,12 @@ const Results = () => {
                             >
                                 Check Your Game History
                             </button> */}
+                            <button 
+                            onClick={() => navigate("/leaderboard")}
+                            className="w-full bg-purple-500 text-white py-4 text-xl rounded-lg font-bold hover:bg-purple-600 transition-colors duration-300"
+                            >
+                            View Leaderboard
+                            </button>
                         </div>
                     </div>
                 </div>

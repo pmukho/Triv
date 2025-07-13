@@ -7,7 +7,7 @@ from pydantic import BaseModel
 import os
 import time
 
-# wiki_wiki = wikipediaapi.Wikipedia(user_agent= 'SWEats (njwei@g.ucla.edu)', language='en')
+# wiki_wiki = wikipediaapi.Wikipedia(user_agent= 'SWEats (geoffreyxu@g.ucla.edu)', language='en')
 # llm = OpenAI()
 
 wiki_wiki = None
@@ -62,10 +62,11 @@ app.add_middleware(
 def read_root():
     return {"Hello": "World"}
 
-DUMMY_MODE = os.getenv("DUMMY_MODE", None)
+DUMMY_MODE = os.getenv("DUMMY_MODE", "False").lower() == "true"
 
 @app.post("/questions", tags=["questions"])
 def read_questions(articles: Articles)-> Questions:
+    print("=== read_questions CALLED ===")
     """
     Given a list of article titles, generate a NAQT style trivia question for each article.
     
@@ -81,9 +82,10 @@ def read_questions(articles: Articles)-> Questions:
     questions = []
     ok = True
     error = ""
-
+    print("reading questions")
     # FOR TESTING PURPOSES WITHOUT USING OPENAI OR WIKIPEDIA
     if DUMMY_MODE:
+        print("Testing in DUMMY MODE")
         for title in articles.article_names:
             question = Question(prompt1="prompt1", prompt2="prompt2", prompt3="prompt3", answer=title)
             questions.append(question)
@@ -92,6 +94,7 @@ def read_questions(articles: Articles)-> Questions:
         return Questions(questions=questions, ok=ok, error=error)
     
     for article_name in articles.article_names:
+        print(f"Generating question for article {article_name}")
         page = wiki_wiki.page(article_name)
         if not page.exists():
             error = f"Article {article_name} does not exist."
@@ -114,9 +117,10 @@ def read_questions(articles: Articles)-> Questions:
             continue
 
         while True:
+            print("Hitting LLM")
             try: 
                 completion = llm.chat.completions.create(
-                    model="gpt-4o",
+                    model="gpt-3.5-turbo",
                     # model="gpt-4.5-preview",
                     messages=[
                         {"role": "developer", "content": "You are a helpful assistant."},
@@ -129,6 +133,8 @@ def read_questions(articles: Articles)-> Questions:
                 # print(completion.choices[0].message, flush=True)
                 print(completion.choices[0].message.content, flush=True)
                 content = completion.choices[0].message.content
+                print("=== LLM Raw Output ===", flush=True)
+                print(content, flush=True)
 
                 prompt1 = content.split("1.")[1].split("\n2.")[0].strip()
                 prompt2 = content.split("\n2.")[1].split("\n3.")[0].strip()
@@ -149,6 +155,11 @@ def read_questions(articles: Articles)-> Questions:
                     break
                 else:
                     print("Rate limit error. Trying again.", flush=True)
+
+            except Exception as e:
+                print("❌ Exception from LLM or missing fields:", e)
+                break
+
 
         if not ok:
             break

@@ -101,6 +101,7 @@ def evict_questions_from_db():
 
 CATEGORIES = [] # set by lifespan start
 MIN_THRESHOLD_FACTOR = os.environ.get("MIN_THRESHOLD_FACTOR", 0.1)
+MIN_THRESHOLD_FACTOR = 1.1
 PROACTIVE_FETCH_COUNT = os.environ.get("PROACTIVE_FETCH_COUNT", 5)
 QGEN_BATCH_SIZE = os.environ.get("QGEN_BATCH_SIZE", 10)
 GENERATE_CHECK_PERIOD = os.environ.get("GENERATE_CHECK_PERIOD", 5) # in minutes
@@ -192,6 +193,8 @@ def fetch_and_store_questions(title_category_batch):
     questions = []
     with httpx.Client(timeout=httpx.Timeout(120.0, connect=10.0)) as client:
         try:
+            print(">> Posting to question-gen with payload:", payload)
+
             response = client.post("http://question-gen:8000/questions", json=payload)
             response.raise_for_status()
             questions = response.json()["questions"]
@@ -408,7 +411,9 @@ async def get_db_batch(batch_req: GameBatchReq, fetch_count: int = 10):
             usage_count=q[7],
             downvotes=q[8]
         ) for q in questions]
-
+        
+        if not questions:
+            return
         # update usage count
         placeholders = ",".join(["%s"] * len(questions))
         query = f"""
@@ -476,7 +481,7 @@ async def serve_game_batch(batch_req: GameBatchReq) -> GameBatchResp:
     db_results = await get_db_batch(fwd_req)
     print("DB RESULTS: ", db_results)
     print("CACHED QS: ", cached_qs)
-    return GameBatchResp(batch=cached_qs + db_results)
+    return GameBatchResp(batch=cached_qs + (db_results or []))
 
 @app.post("/downvote/", tags=["downvote"])
 async def downvote_questions(downvote_req: DownvoteBatchReq):
