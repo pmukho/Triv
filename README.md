@@ -1,4 +1,4 @@
-# CS130-SWEats
+# Triv
 
 ## Living Documents
 1. [PRD](https://docs.google.com/document/d/1jvmDcy5BvK7oRuoCHL4rN7Vr4UHbwxqwlw8ncNZxmbI/edit?usp=sharing)
